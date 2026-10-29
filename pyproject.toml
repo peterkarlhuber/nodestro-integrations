@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nodestro-integrations"
+version = "0.2.0"
+description = "Nodestro Integrations – optional extensions of the Nodestro runtime (local OCR of scanned PDFs)."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "Peter Karlhuber" }]
+dependencies = [
+    # The extension contract (nodestro_runtime.extensions, contract 1).
+    "nodestro-runtime @ git+https://github.com/peterkarlhuber/nodestro-runtime.git@b7d9d54655de7058bd16ad5410691d87e6781cef",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8",
+    "ruff>=0.8",
+]
+
+[project.entry-points."nodestro.integrations"]
+tesseract-ocr = "nodestro_integrations.ocr:integration"
+
+[project.urls]
+Repository = "https://github.com/peterkarlhuber/nodestro-integrations"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nodestro_integrations"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["nodestro_integrations"]
+known-third-party = ["nodestro_runtime"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+packages = ["nodestro_integrations"]
+mypy_path = "src"
