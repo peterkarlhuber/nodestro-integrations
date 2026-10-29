@@ -1,5 +1,12 @@
 # Changelog
 
+## Unveröffentlicht
+
+- OCR: Hat ein PDF mehr als 50 Seiten, steht im erkannten Text, wie viele Seiten erkannt wurden und wie viele
+  das Dokument hat (`pdfinfo` aus poppler), statt den Rest stillschweigend wegzulassen.
+- Pin von `nodestro-runtime` auf den aktuellen Stand.
+- CI: aktuelle Actions (Node 24), Checkout ohne gespeicherte Zugangsdaten.
+
 ## 0.2.0 (2026-10-29)
 
 - Erste Version als eigenes Repository: aus `nodestro` 0.1.0 (Commit 15e2076, heute `nodestro-legacy`)

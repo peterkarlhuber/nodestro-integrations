@@ -57,6 +57,15 @@ def test_the_engine_runs_the_local_programs(programs: Path) -> None:
     assert result.pages == 2 and result.words == 4 and result.uncertain == 2
     assert result.language == "deu+eng"
     assert "## Page 1\n\nLieferschein [?4711]" in result.text
+    # Without a page count from pdfinfo nothing is added.
+    assert "Only the first" not in result.text
+
+
+def test_a_long_document_says_which_pages_were_recognised(programs: Path) -> None:
+    _program(programs, "pdfinfo", 'printf "Title: Scan\\nPages:          120\\nEncrypted: no\\n"\n')
+    result = ocr.TesseractOcr().recognize(b"%PDF-1.4", "scan.pdf")
+    assert result.pages == 2
+    assert result.text.endswith("(Only the first 2 of 120 pages were recognised.)")
 
 
 def test_without_the_programs_the_engine_is_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

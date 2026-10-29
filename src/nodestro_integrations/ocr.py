@@ -23,6 +23,8 @@ from nodestro_runtime.extensions import Integration
 from . import __version__
 
 _OCR_UNCERTAIN = 60.0
+#: Pages recognised at most per document (rendering and recognition take seconds per page).
+MAX_PAGES = 50
 
 
 def ocr_available() -> bool:
@@ -40,6 +42,19 @@ def tesseract_languages() -> str:
         return "eng"
     found = [code for code in wanted if code in listed]
     return "+".join(found) or "eng"
+
+
+def page_count(source: Path) -> int | None:
+    """The number of pages from poppler's ``pdfinfo`` (``None`` when it is missing or fails)."""
+    try:
+        info = subprocess.run(["pdfinfo", str(source)], capture_output=True, text=True, timeout=60, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in info.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip() == "Pages" and value.strip().isdigit():
+            return int(value.strip())
+    return None
 
 
 def parse_tsv(tsv: str) -> tuple[str, int, int]:
@@ -77,7 +92,7 @@ def run_ocr(data: bytes, name: str) -> OcrResult:
         source.write_bytes(data)
         try:
             subprocess.run(
-                ["pdftoppm", "-r", "200", "-l", "50", "-png", str(source), str(folder / "page")],
+                ["pdftoppm", "-r", "200", "-l", str(MAX_PAGES), "-png", str(source), str(folder / "page")],
                 capture_output=True,
                 timeout=300,
                 check=True,
@@ -102,6 +117,10 @@ def run_ocr(data: bytes, name: str) -> OcrResult:
             uncertain += page_uncertain
             words += page_words
             texts.append(f"## Page {number}\n\n{text}")
+        total = page_count(source)
+    if total is not None and total > len(pages):
+        # Said in the text itself, so that neither the user nor an agent takes it for the whole document.
+        texts.append(f"(Only the first {len(pages)} of {total} pages were recognised.)")
     return OcrResult(text="\n\n".join(texts), pages=len(pages), uncertain=uncertain, words=words, language=language)
 
 
