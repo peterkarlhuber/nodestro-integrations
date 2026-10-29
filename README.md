@@ -27,6 +27,7 @@ meine-integration = "mein_paket:integration"
 ```python
 from nodestro_runtime.extensions import Integration
 
+
 def integration() -> Integration:
     return Integration(name="meine-integration", version="1.0.0", tools=[...], description="...")
 ```
