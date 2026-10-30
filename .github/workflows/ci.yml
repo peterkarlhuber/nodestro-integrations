@@ -12,10 +12,14 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         python: ["3.10", "3.13"]
+    env:
+      # The real OCR tests fail instead of being skipped when a program or language is missing.
+      NODESTRO_REQUIRE_REAL_OCR: "1"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -24,27 +28,39 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           cache: pip
-      # The Nodestro components and orkexa are private: pip clones them with a token that can read them.
-      - name: Grant read access to the private repositories
+      # The real OCR tests run with the real programs and all six Nodestro languages (the other tests simulate them).
+      - name: Install tesseract and poppler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr poppler-utils \
+            tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-fra tesseract-ocr-por tesseract-ocr-ita
+          tesseract --version
+          tesseract --list-langs
+          pdftoppm -v
+          pdfinfo -v
+      # The Nodestro components and orkexa are private: git reads them with the token, which exists only in the
+      # environment of this step (no global Git configuration, nothing left for the later steps).
+      - name: Install the package (private dependencies read with NODESTRO_READ)
         env:
           NODESTRO_READ: ${{ secrets.NODESTRO_READ }}
         run: |
           if [ -z "$NODESTRO_READ" ]; then
-            echo "::error::Secret NODESTRO_READ fehlt: ein Token mit Lesezugriff auf orkexa und die nodestro-Repositories."
+            echo "::error::Secret NODESTRO_READ is missing: a token with read access to orkexa and the nodestro repositories."
             exit 1
           fi
-          git config --global url."https://x-access-token:${NODESTRO_READ}@github.com/peterkarlhuber/".insteadOf "https://github.com/peterkarlhuber/"
-      # The real OCR test runs with the real programs (the other tests simulate them).
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr poppler-utils
-      - run: pip install -e ".[dev]"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${NODESTRO_READ}@github.com/peterkarlhuber/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/peterkarlhuber/"
+          pip install -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy
       - run: pytest
 
   package:
-    # The wheel installs on its own and contains what the package needs at run time.
+    # The wheel installs on its own, contains what the package needs at run time and registers the entry point.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,24 +68,47 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      # The Nodestro components and orkexa are private: pip clones them with a token that can read them.
-      - name: Grant read access to the private repositories
+      - run: pip install build
+      - run: python -m build
+      - name: Check the contents of the wheel and the source distribution
+        run: |
+          unzip -l dist/*.whl
+          tar -tzf dist/*.tar.gz
+          unzip -l dist/*.whl | grep -q "nodestro_integrations/py.typed"
+          unzip -p dist/*.whl "*.dist-info/entry_points.txt" | grep -q "tesseract-ocr = nodestro_integrations.ocr:integration"
+          if unzip -l dist/*.whl | grep -q "tests/"; then
+            echo "::error::The wheel contains the tests."
+            exit 1
+          fi
+      - name: Install the wheel into a fresh environment (private dependencies read with NODESTRO_READ)
         env:
           NODESTRO_READ: ${{ secrets.NODESTRO_READ }}
         run: |
           if [ -z "$NODESTRO_READ" ]; then
-            echo "::error::Secret NODESTRO_READ fehlt: ein Token mit Lesezugriff auf orkexa und die nodestro-Repositories."
+            echo "::error::Secret NODESTRO_READ is missing: a token with read access to orkexa and the nodestro repositories."
             exit 1
           fi
-          git config --global url."https://x-access-token:${NODESTRO_READ}@github.com/peterkarlhuber/".insteadOf "https://github.com/peterkarlhuber/"
-      - run: pip install build
-      - run: python -m build
-      - name: Install the wheel into a fresh environment
-        run: |
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0="url.https://x-access-token:${NODESTRO_READ}@github.com/peterkarlhuber/.insteadOf"
+          export GIT_CONFIG_VALUE_0="https://github.com/peterkarlhuber/"
           python -m venv "$RUNNER_TEMP/wheel"
           "$RUNNER_TEMP/wheel/bin/pip" install dist/*.whl
-          cd "$RUNNER_TEMP"
-          "$RUNNER_TEMP/wheel/bin/python" -c "import nodestro_integrations as p; print(p.__name__, p.__version__)"
+      - name: The runtime discovers the installed integration
+        working-directory: ${{ runner.temp }}
+        run: |
+          "$RUNNER_TEMP/wheel/bin/python" - <<'EOF'
+          import nodestro_integrations
+          from nodestro_integrations.ocr import ocr_available
+          from nodestro_runtime.extensions import CONTRACT, Extensions, discover
+
+          found = {item.name: item for item in discover()}
+          item = found["tesseract-ocr"]
+          assert item.version == nodestro_integrations.__version__ != "0.0.0", item.version
+          assert item.contract == CONTRACT and item.ocr is not None
+          # Installed, but OCR is offered only when the programs and a language are there.
+          assert (Extensions([item]).ocr() is not None) == ocr_available()
+          print(nodestro_integrations.__file__, item)
+          EOF
       - uses: actions/upload-artifact@v7
         with:
           name: dist
