@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Platform integration (2026-10-30)
+
+- Pin of `nodestro-runtime` at `ad75859` (before: `b1bae2a`), the runtime the other components are tested with. Its OCR
+  note now says "1 page" instead of "1 pages"; the OCR test expects the singular.
+
 ### OCR
 
 - Resource limits for untrusted PDFs: each page is rendered on its own, at a lower resolution when 200 dpi would

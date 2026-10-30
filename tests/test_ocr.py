@@ -542,6 +542,6 @@ def test_real_ocr_through_knowledge_and_run_inputs(tmp_path: Path) -> None:
         assert {"input.pdf_scanned", "input.ocr_used"} <= set(item.notes)
         extracted = workspace.inputs.extracted(item.id)
         assert extracted.pages and "Lieferschein 4711" in extracted.pages[0]
-        assert "Text recognised by OCR (1 pages" in extracted.text
+        assert "Text recognised by OCR (1 page," in extracted.text
     finally:
         workspace.close()
