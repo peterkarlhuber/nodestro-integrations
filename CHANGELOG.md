@@ -4,7 +4,7 @@
 
 ### Platform integration (2026-10-30)
 
-- Pin of `nodestro-runtime` at `73767fc` (before: `b1bae2a`), the runtime the other components are tested with. Its OCR
+- Pin of `nodestro-runtime` at `ad75859` (before: `b1bae2a`), the runtime the other components are tested with. Its OCR
   note now says "1 page" instead of "1 pages"; the OCR test expects the singular.
 
 ### OCR
