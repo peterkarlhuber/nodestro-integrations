@@ -11,8 +11,16 @@ license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "Peter Karlhuber" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing",
+    "Typing :: Typed",
+]
 dependencies = [
-    # The extension contract (nodestro_runtime.extensions, contract 1).
+    # The extension contract (nodestro_runtime.extensions, contract 1). tesseract and poppler are programs,
+    # not Python packages: see README.md.
     "nodestro-runtime @ git+https://github.com/peterkarlhuber/nodestro-runtime.git@b1bae2ae9aed86ffddcac64fb83abe48a7acc996",
 ]
 
@@ -28,6 +36,7 @@ tesseract-ocr = "nodestro_integrations.ocr:integration"
 
 [project.urls]
 Repository = "https://github.com/peterkarlhuber/nodestro-integrations"
+Changelog = "https://github.com/peterkarlhuber/nodestro-integrations/blob/master/CHANGELOG.md"
 
 [tool.hatch.metadata]
 allow-direct-references = true

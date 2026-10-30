@@ -1,16 +1,53 @@
 # Changelog
 
-## Unveröffentlicht
+## Unreleased
 
-- OCR: Hat ein PDF mehr als 50 Seiten, steht im erkannten Text, wie viele Seiten erkannt wurden und wie viele
-  das Dokument hat (`pdfinfo` aus poppler), statt den Rest stillschweigend wegzulassen.
-- Pin von `nodestro-runtime` auf den aktuellen Stand.
-- CI: aktuelle Actions (Node 24), Checkout ohne gespeicherte Zugangsdaten.
+### OCR
+
+- Resource limits for untrusted PDFs: each page is rendered on its own, at a lower resolution when 200 dpi would
+  exceed 40 million pixels (a 25 KB PDF with a 120-inch page used to take 48 s and about 1.7 GB in `pdftoppm`), and
+  the whole document has a time limit of 900 s next to the 300 s per program call (before: up to 300 s for each of
+  50 pages).
+- A page that `pdftoppm` does not render completely now fails the OCR instead of appearing as an empty page: poppler
+  writes a 1x1 image and reports success for pages it cannot allocate, and missing or broken page images were
+  ignored.
+- `pdfinfo` is now required: it gives the page count and the page sizes. Without it a document longer than 50 pages
+  could be cut short without the note about the missing pages. The crop box is rendered, as PDF viewers show it.
+- Language: the first page is read in each installed Nodestro language and the most confident one is put first.
+  With all six in a fixed order tesseract lost accents (`Albaran nümero` instead of `Albarán número`, `quantita`,
+  `recue`, `vocés`).
+- Rotated pages: tesseract runs with orientation detection (`--psm 1`); pages scanned sideways or upside down came
+  out as unreadable text.
+- Paragraphs are separated by an empty line; lines, `[?word]` marks and `## Page N` headings are unchanged.
+- OCR is reported as unavailable when tesseract has none of the six languages or cannot list them, instead of
+  falling back to `eng` that may not be installed; `tesseract_languages()` returns an empty string then.
+- The programs get a reduced environment without API keys, tokens and other secrets of the calling process,
+  `OMP_THREAD_LIMIT=1` unless set, and are started from their full paths in the temporary folder.
+- Program output is decoded as UTF-8 (on Windows it was decoded with the ANSI code page, which garbled umlauts and
+  accents).
+- Clearer errors with the same codes: damaged, password-protected and empty PDFs, the page that failed, timeouts,
+  no temporary space (an `OSError` used to escape as an unexpected error).
+- The integration states contract 1 explicitly instead of taking the runtime's current version, so a future runtime
+  with another contract refuses it instead of calling it.
+- For a PDF with more than 50 pages, the recognized text says how many pages were recognized and how many the
+  document has (`pdfinfo` from poppler), instead of silently leaving out the rest.
+
+### Project
+
+- Documentation, CI and all developer-facing text in English; the README covers installation per system, limits,
+  quality, errors, security and writing an integration.
+- Tests: simulated programs for page order, the page limit, failures, timeouts, temporary files, file names and the
+  environment; real OCR of a rotated Spanish scan, damaged PDFs and the whole path through knowledge and run input
+  files. CI installs all six languages and fails instead of skipping the real OCR tests.
+- CI: the token `NODESTRO_READ` is only in the environment of the install steps (no global Git configuration),
+  the tool versions are logged, the wheel is checked for its entry point after a clean installation.
+- `nodestro-runtime` pinned to the current version; current CI actions (Node 24); checkout without stored
+  credentials.
 
 ## 0.2.0 (2026-10-29)
 
-- Erste Version als eigenes Repository: aus `nodestro` 0.1.0 (Commit 15e2076, heute `nodestro-legacy`)
-  herausgelöst, ohne neue Funktionen und ohne Verhaltensänderung. Herkunft jeder Datei: PROVENANCE.md.
-- Abhängigkeiten auf exakte Commits gepinnt (orkexa `cbf6df3d6f727b96924f1ae66e60b469eeef58e6`); die getestete
-  Kombination steht in `nodestro-studio/platform/versions.json`.
-- CI mit dem Repository-Secret `NODESTRO_READ`.
+- First version as a repository of its own: split from `nodestro` 0.1.0 (commit 15e2076, now `nodestro-legacy`)
+  without new features or behavior changes. The origin of every file: PROVENANCE.md.
+- Dependencies pinned to exact commits (orkexa `cbf6df3d6f727b96924f1ae66e60b469eeef58e6`); the tested combination
+  is recorded in `nodestro-studio/platform/versions.json`.
+- CI with the repository secret `NODESTRO_READ`.
