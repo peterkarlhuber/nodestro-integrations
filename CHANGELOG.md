@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Operating profiles (2026-10-31)
+
+- Pin of `nodestro-runtime` at `8ea9a5c` (before: `ad75859`), the runtime with operating profiles that
+  `nodestro-api` and `nodestro-examples` pin. No code change; integrations do not use the profile.
+
 ### Platform integration (2026-10-30)
 
 - Pin of `nodestro-runtime` at `ad75859` (before: `b1bae2a`), the runtime the other components are tested with. Its OCR
