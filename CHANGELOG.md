@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Runtime pin (2026-10-31)
+
+- Pin of `nodestro-runtime` at `0aee6a9` (before: `8597544`), the platform's current runtime (per-call tool
+  approvals S-2, MCP write gate and OAuth, budget reservations, run limits). Nothing changes in this package.
+
 ### Sandbox gateway security fixes (2026-10-31)
 
 - Pin of `nodestro-runtime` at `8597544` (before: `b6b757b`): the sandbox gateway of Nodestro Local Docker parses
