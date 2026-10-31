@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Storage seams (2026-10-31)
+
+- Pin of `nodestro-runtime` at `e90c205` (before: `8ea9a5c`): the runtime with the `DocumentStore` protocol
+  (`Store` stays as an alias). No code change here.
+
 ### Operating profiles (2026-10-31)
 
 - Pin of `nodestro-runtime` at `8ea9a5c` (before: `ad75859`), the runtime with operating profiles that
