@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Runtime pin: backend audit fixes (2026-11-01)
+
+- Pin of `nodestro-runtime` at `6eacec1` (before: `58cec5c`): fixes from the internal backend audit (bounded sandbox
+  output, run integrity across processes, PostgreSQL connection pool, resume side-effect journal, provider failure
+  codes; see the runtime CHANGELOG).
+
 ### Runtime pin: MCP re-review fixes R-1, R-2 (2026-11-01)
 
 - Pin of `nodestro-runtime` at `58cec5c` (before: `f71086a`): a per-call approval also covers the tool's
