@@ -21,10 +21,10 @@ jobs:
       # The real OCR tests fail instead of being skipped when a program or language is missing.
       NODESTRO_REQUIRE_REAL_OCR: "1"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -56,19 +56,29 @@ jobs:
       - run: ruff format --check .
       - run: mypy
       - run: pytest
+      # Known vulnerabilities in the installed dependencies (as orkexa's CI checks them). Blocking: an advisory that
+      # was reviewed and cannot be fixed yet goes into PIP_AUDIT_IGNORE (space-separated IDs, with the reason here).
+      - name: Dependency audit
+        if: matrix.python == '3.13'
+        env:
+          PIP_AUDIT_IGNORE: ""
+        run: |
+          pip install pip-audit==2.10.1
+          args=(); for id in $PIP_AUDIT_IGNORE; do args+=(--ignore-vuln "$id"); done
+          pip-audit --skip-editable --progress-spinner off "${args[@]}"
 
   package:
     # The wheel installs on its own, contains what the package needs at run time and registers the entry point.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - run: pip install build
+      - run: pip install build==1.6.1
       - run: python -m build
       - name: Check the contents of the wheel and the source distribution
         run: |
@@ -109,7 +119,7 @@ jobs:
           assert (Extensions([item]).ocr() is not None) == ocr_available()
           print(nodestro_integrations.__file__, item)
           EOF
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dist
           path: dist/
