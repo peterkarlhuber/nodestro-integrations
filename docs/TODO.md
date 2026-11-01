@@ -11,8 +11,8 @@
 |---|---|
 | P0 Critical | 0 |
 | P1 High | 0 |
-| P2 Medium | 0 |
-| P3 Low | 3 |
+| P2 Medium | 1 |
+| P3 Low | 2 |
 | P4 Optional | 4 |
 
 **Release blockers:** None for this repository.
@@ -86,12 +86,12 @@ None known.
 
 ### INT-007 · CI requires the `NODESTRO_READ` token although the dependencies are public
 
-- **Priority:** P3 Low · **Status:** Open · **Refs:** #36, backend audit D-08 residual
+- **Priority:** P2 Medium · **Status:** Open · **Refs:** #36, backend audit D-08 residual
 - **What:** The CI install steps exit when the `NODESTRO_READ` secret is missing and still call the components
   private. All Nodestro repositories and orkexa are public now, so runs without secrets (Dependabot, forks) fail early.
 - **Next step:** Install the git dependencies anonymously, make the token optional or remove it, fix the comments.
-- **Depends on:** none; the same change is tracked in nodestro-api #50, nodestro-sdk #47, nodestro-server #25,
-  nodestro-desktop #17 and nodestro-studio #85.
+- **Depends on:** none; the same change is tracked in nodestro-runtime #75 (RT-029), nodestro-api #50,
+  nodestro-sdk #47, nodestro-examples #40, nodestro-server #25, nodestro-desktop #17 and nodestro-studio #85.
 
 ## Later optimizations
 
@@ -122,16 +122,17 @@ None known.
 ### INT-006 · Python dependencies not watched by Dependabot
 
 - **Priority:** P4 Optional · **Status:** Accepted risk · **Refs:** `.github/dependabot.yml`, `.github/workflows/ci.yml`
-- **What:** Dependabot updates only GitHub Actions; the private Nodestro dependencies are pinned by Git commit.
-- **Reason:** Dependabot cannot read the private Git URLs; pins move with the platform's pin cascade, and the blocking
-  `pip-audit` step in CI catches known vulnerabilities.
+- **What:** Dependabot updates only GitHub Actions; the Nodestro dependencies are pinned by Git commit.
+- **Reason:** Pins move with the platform's pin cascade, and the blocking `pip-audit` step in CI catches known
+  vulnerabilities. The original reason (private Git URLs) no longer applies now that all repositories are public;
+  re-evaluate a pip ecosystem entry together with INT-007 and fix the stale comment in `dependabot.yml`.
 
 ## Cross-repository dependencies
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
-| INT-001 | nodestro-runtime | pointer in its cross-repo table | The bound may belong where the runtime calls OCR. |
-| INT-007 | all component repositories | `NODESTRO_READ` CI change (api #50, sdk #47, runtime #75, server #25, desktop #17, studio #85) | Same change everywhere |
+| INT-001 | nodestro-runtime | pointer in its cross-repo table (no RT entry yet) | The bound may belong where the runtime calls OCR. |
+| INT-007 | all component repositories | `NODESTRO_READ` CI change (runtime #75 / RT-029, api #50, sdk #47, examples #40, server #25, desktop #17, studio #85) | Same change everywhere |
 
 ## Maintaining this file
 
