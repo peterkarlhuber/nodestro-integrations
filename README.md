@@ -172,6 +172,8 @@ with `NODESTRO_REQUIRE_REAL_OCR=1`, which CI sets so that they can never be skip
 CI needs the repository secret `NODESTRO_READ` (read access to orkexa and the Nodestro repositories); it is
 available only to the steps that install the private dependencies.
 
+Open work (release blockers, known gaps, follow-ups) is listed in [docs/TODO.md](docs/TODO.md).
+
 ## Provenance and license
 
 The OCR comes from `backend/src/nodestro/documents.py` of `nodestro` 0.1 (15e2076); see
