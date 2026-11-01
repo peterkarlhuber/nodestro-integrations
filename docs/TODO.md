@@ -12,12 +12,12 @@
 | P0 Critical | 0 |
 | P1 High | 0 |
 | P2 Medium | 0 |
-| P3 Low | 2 |
+| P3 Low | 3 |
 | P4 Optional | 4 |
 
 **Release blockers:** None for this repository.
 
-The package (local OCR of scanned PDFs) is small and well covered: no open issues or pull requests, no TODO markers or
+The package (local OCR of scanned PDFs) is small and well covered: no TODO markers or
 skipped tests in the code, real-OCR tests that CI cannot skip, a dependency audit and SHA-pinned actions. What remains
 is hardening for the server profile, platform coverage and documented limits of OCR itself.
 
@@ -84,7 +84,14 @@ None known.
 
 ## Technical debt
 
-None known.
+### INT-007 · CI requires the `NODESTRO_READ` token although the dependencies are public
+
+- **Priority:** P3 Low · **Status:** Open · **Refs:** #36, backend audit D-08 residual
+- **What:** The CI install steps exit when the `NODESTRO_READ` secret is missing and still call the components
+  private. All Nodestro repositories and orkexa are public now, so runs without secrets (Dependabot, forks) fail early.
+- **Next step:** Install the git dependencies anonymously, make the token optional or remove it, fix the comments.
+- **Depends on:** none; the same change is tracked in nodestro-api #50, nodestro-sdk #47, nodestro-server #25,
+  nodestro-desktop #17 and nodestro-studio #85.
 
 ## Later optimizations
 
@@ -123,7 +130,8 @@ None known.
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
-| INT-001 | nodestro-runtime | (none yet) | The bound may belong where the runtime calls OCR. |
+| INT-001 | nodestro-runtime | pointer in its cross-repo table | The bound may belong where the runtime calls OCR. |
+| INT-007 | all component repositories | `NODESTRO_READ` CI change (api #50, sdk #47, runtime #75, server #25, desktop #17, studio #85) | Same change everywhere |
 
 ## Maintaining this file
 
@@ -134,4 +142,4 @@ None known.
 - Accepted risks stay listed with their reason until the risk is removed or re-evaluated.
 - Re-review the whole file before each release and update the "Last full review" line.
 - Security issues that are not yet fixed are described only in general terms here. Report details privately
-  (see SECURITY.md or GitHub private vulnerability reporting), never in this file or in public issues.
+  (GitHub private vulnerability reporting), never in this file or in public issues.
