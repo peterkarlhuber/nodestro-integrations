@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Runtime pin: one continue of a paused run across processes (2026-11-01)
+
+- Pin of `nodestro-runtime` at `c86781b` (before: `26c86ef`): a paused run is queued again by compare-and-set, so a
+  decision and the deadline sweeps of several workers continue it exactly once. No change in this package.
+
 ### Runtime pin: runs paused at a tool approval (2026-11-01)
 
 - Pin of `nodestro-runtime` at `26c86ef` (before: `6ac4ae3`): with the new switch
