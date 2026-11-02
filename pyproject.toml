@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
     # The extension contract (nodestro_runtime.extensions, contract 1). tesseract and poppler are programs,
     # not Python packages: see README.md.
-    "nodestro-runtime @ git+https://github.com/peterkarlhuber/nodestro-runtime.git@0369132fadf3fd2b96ead8c03774f420aaf9d5b6",
+    "nodestro-runtime @ git+https://github.com/peterkarlhuber/nodestro-runtime.git@51262a26df41879220f385061f373e525b5b0f85",
 ]
 
 [project.optional-dependencies]
