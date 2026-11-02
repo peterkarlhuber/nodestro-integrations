@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.13"]
+        python: ["3.11", "3.13"]
     env:
       # The real OCR tests fail instead of being skipped when a program or language is missing.
       NODESTRO_REQUIRE_REAL_OCR: "1"

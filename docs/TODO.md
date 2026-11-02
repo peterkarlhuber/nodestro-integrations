@@ -70,10 +70,10 @@ None known.
 
 ## Platform coverage
 
-### INT-002 · OCR untested on macOS, Windows and Python 3.11/3.12
+### INT-002 · OCR untested on macOS, Windows and Python 3.12
 
 - **Priority:** P3 Low · **Status:** Open · **Refs:** README "Installation", integrations quality round 2026-10-30
-- **What:** CI runs Ubuntu with Python 3.10 and 3.13 only. The Homebrew and Windows install paths are documented but
+- **What:** CI runs Ubuntu with Python 3.11 and 3.13 only. The Homebrew and Windows install paths are documented but
   never run; Windows output decoding was fixed without a real Windows run. Load behavior in the server profile is not
   measured (see INT-001).
 - **Next step:** Run the real-OCR tests once on macOS and Windows (or add CI jobs) and record the result in the README.
