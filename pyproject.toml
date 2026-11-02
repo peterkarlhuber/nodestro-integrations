@@ -9,11 +9,11 @@ description = "Nodestro Integrations – optional extensions of the Nodestro run
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Peter Karlhuber" }]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.13",
     "Topic :: Text Processing",
     "Typing :: Typed",
@@ -50,7 +50,7 @@ addopts = "-ra --strict-markers"
 
 [tool.ruff]
 line-length = 120
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
@@ -61,7 +61,7 @@ known-first-party = ["nodestro_integrations"]
 known-third-party = ["nodestro_runtime"]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 strict = true
 packages = ["nodestro_integrations"]
 mypy_path = "src"
