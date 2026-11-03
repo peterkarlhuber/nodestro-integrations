@@ -169,8 +169,7 @@ the page limit, failures, timeouts, the environment and temporary files. The tes
 real programs and the scans in `tests/data/`; they are skipped when the programs or languages are missing, except
 with `NODESTRO_REQUIRE_REAL_OCR=1`, which CI sets so that they can never be skipped unnoticed.
 
-CI needs the repository secret `NODESTRO_READ` (read access to orkexa and the Nodestro repositories); it is
-available only to the steps that install the private dependencies.
+CI needs no secret: orkexa and the Nodestro repositories are public and are installed anonymously.
 
 Open work (release blockers, known gaps, follow-ups) is listed in [docs/TODO.md](docs/TODO.md).
 
