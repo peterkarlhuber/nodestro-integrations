@@ -3,7 +3,8 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-01 against `master` at `204c95c`.
+> **Last full review:** 2026-11-03 against `master` at `b3c7c90` (internal backend audit round 2; fixes on
+> branch `wip/a2-orkfix`, not yet merged).
 
 ## Summary
 
@@ -40,10 +41,13 @@ None known.
 
 ### INT-001 · Resource hardening of OCR for many parallel documents
 
-- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** identified in this inventory
+- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** identified in this inventory; backend audit
+  2026-11-03 (ORK2-05)
 - **What:** Limits apply per document (pages, pixels, time, one thread per tesseract call). How many documents are
   recognized at the same time in one process is not bounded here, and behavior under parallel load in the server
-  profile is not measured.
+  profile is not measured. The per-page pixel bound itself could be exceeded (a page larger than the limit even at
+  1 dpi was rendered anyway, 193 Mpx, about 750 MB for poppler); since the 2026-11-03 fix such pages are refused,
+  so the per-document memory bound now holds, but parallel documents still multiply it.
 - **Next step:** Decide whether the bound belongs in this package or in the runtime's knowledge and input-file
   handling, then add it with a test and document it under "Limits".
 - **Depends on:** possibly nodestro-runtime (where OCR is called)
@@ -111,6 +115,10 @@ None known.
   in a private temporary folder and within the limits; they are not otherwise sandboxed.
 - **Reason:** These are maintained system packages; isolating them would need the container sandbox. Keeping them
   updated is the operator's job and is documented. Re-evaluate before any production server deployment.
+- **Re-evaluated 2026-11-03:** still acceptable for the desktop. For the server profile the risk is resource
+  exhaustion more than code execution: there is no address-space limit for the programs (RLIMIT_AS on POSIX) and no
+  bound on parallel documents (INT-001). Before a server deployment, add RLIMIT_AS for poppler and tesseract or run
+  OCR in the container sandbox.
 
 ### INT-005 · OCR quality limits (multi-column order, poor scans)
 
@@ -124,8 +132,8 @@ None known.
 - **Priority:** P4 Optional · **Status:** Accepted risk · **Refs:** `.github/dependabot.yml`, `.github/workflows/ci.yml`
 - **What:** Dependabot updates only GitHub Actions; the Nodestro dependencies are pinned by Git commit.
 - **Reason:** Pins move with the platform's pin cascade, and the blocking `pip-audit` step in CI catches known
-  vulnerabilities. The original reason (private Git URLs) no longer applies now that all repositories are public;
-  re-evaluate a pip ecosystem entry together with INT-007 and fix the stale comment in `dependabot.yml`.
+  vulnerabilities. The original reason (private Git URLs) no longer applies now that all repositories are public
+  (the comment in `dependabot.yml` says so since 2026-11-03); re-evaluate a pip ecosystem entry together with INT-007.
 
 ## Cross-repository dependencies
 

@@ -1,7 +1,8 @@
 # Weekly, grouped update pull requests with a small limit. Every action in the workflows is pinned by commit SHA
 # (the version is the trailing comment); Dependabot keeps those pins current.
-# Python dependencies are left out: pyproject.toml names the private Nodestro components by git URL, which
-# Dependabot cannot read without credentials of its own.
+# Python dependencies are left out: pyproject.toml pins the (public) Nodestro components by git commit, and those
+# pins move with the platform's pin cascade; the blocking pip-audit step in CI catches known vulnerabilities
+# (accepted risk INT-006 in docs/TODO.md).
 version: 2
 updates:
   - package-ecosystem: github-actions
