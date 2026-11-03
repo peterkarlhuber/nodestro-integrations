@@ -3,8 +3,8 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-03 against `master` at `b3c7c90` (internal backend audit round 2; fixes on
-> branch `wip/a2-orkfix`, not yet merged).
+> **Last full review:** 2026-11-03 against `master` at `b3c7c90` (internal backend audit round 2; fixes merged
+> in #51 at `e2582cc`).
 
 ## Summary
 
@@ -12,7 +12,7 @@
 |---|---|
 | P0 Critical | 0 |
 | P1 High | 0 |
-| P2 Medium | 1 |
+| P2 Medium | 0 |
 | P3 Low | 2 |
 | P4 Optional | 4 |
 
@@ -88,14 +88,7 @@ None known.
 
 ## Technical debt
 
-### INT-007 · CI requires the `NODESTRO_READ` token although the dependencies are public
-
-- **Priority:** P2 Medium · **Status:** Open · **Refs:** #36, backend audit D-08 residual
-- **What:** The CI install steps exit when the `NODESTRO_READ` secret is missing and still call the components
-  private. All Nodestro repositories and orkexa are public now, so runs without secrets (Dependabot, forks) fail early.
-- **Next step:** Install the git dependencies anonymously, make the token optional or remove it, fix the comments.
-- **Depends on:** none; the same change is tracked in nodestro-runtime #75 (RT-029), nodestro-api #50,
-  nodestro-sdk #47, nodestro-examples #40, nodestro-server #25, nodestro-desktop #17 and nodestro-studio #85.
+None known.
 
 ## Later optimizations
 
@@ -133,14 +126,14 @@ None known.
 - **What:** Dependabot updates only GitHub Actions; the Nodestro dependencies are pinned by Git commit.
 - **Reason:** Pins move with the platform's pin cascade, and the blocking `pip-audit` step in CI catches known
   vulnerabilities. The original reason (private Git URLs) no longer applies now that all repositories are public
-  (the comment in `dependabot.yml` says so since 2026-11-03); re-evaluate a pip ecosystem entry together with INT-007.
+  (the comment in `dependabot.yml` says so since 2026-11-03); a pip ecosystem entry can be re-evaluated now that CI
+  no longer needs a token.
 
 ## Cross-repository dependencies
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
 | INT-001 | nodestro-runtime | pointer in its cross-repo table (no RT entry yet) | The bound may belong where the runtime calls OCR. |
-| INT-007 | all component repositories | `NODESTRO_READ` CI change (runtime #75 / RT-029, api #50, sdk #47, examples #40, server #25, desktop #17, studio #85) | Same change everywhere |
 
 ## Maintaining this file
 
