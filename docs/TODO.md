@@ -3,8 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-03 against `master` at `b3c7c90` (internal backend audit round 2; fixes merged
-> in #51 at `e2582cc`).
+> **Last full review:** 2026-11-03 against `master` at `78413ac` (close-out of the backend audit round 2).
 
 ## Summary
 
@@ -134,6 +133,13 @@ None known.
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
 | INT-001 | nodestro-runtime | pointer in its cross-repo table (no RT entry yet) | The bound may belong where the runtime calls OCR. |
+
+## CI access to private repositories
+
+Keep the repository secret `NODESTRO_READ`; do not delete it. CI currently installs the sibling repositories anonymously
+because they are public, and does not need the secret. When the repositories become private, CI authenticates again
+with this read-only secret, passed only in the environment of the install steps (never in a global Git configuration,
+a log or an image layer).
 
 ## Maintaining this file
 
