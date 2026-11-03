@@ -70,7 +70,7 @@ without the runtime's upload checks:
 | Limit | Value |
 | --- | --- |
 | Pages per document | 50 (`MAX_PAGES`) |
-| Pixels per rendered page | 40 million (`MAX_PAGE_PIXELS`): A1 and smaller at 200 dpi, larger pages at a lower resolution |
+| Pixels per rendered page | 40 million (`MAX_PAGE_PIXELS`): A1 and smaller at 200 dpi, larger pages at a lower resolution; a page above the limit even at 1 dpi is refused (`page N is too large to render`) |
 | One program call | 300 s (`STEP_SECONDS`) |
 | The whole document | 900 s (`MAX_SECONDS`) |
 | Threads per tesseract call | 1 (`OMP_THREAD_LIMIT`, unless set), so parallel documents do not compete for every core |

@@ -85,6 +85,13 @@ def test_the_resolution_stays_within_the_pixel_limit() -> None:
     assert huge == 31
     assert (14400 / 72 * huge) ** 2 <= ocr.MAX_PAGE_PIXELS
     assert ocr._dpi(0, 0) == ocr.DPI
+    # Rounding up to whole pixels never crosses the limit.
+    for size in (14400, 20000.5, 99999, 455_000, 455_300):
+        dpi = ocr._dpi(size, size)
+        assert dpi is not None and ocr._pixels(size, size, dpi) <= ocr.MAX_PAGE_PIXELS
+    # Above the limit even at the lowest resolution: refused, never rendered at 1 dpi beyond the limit.
+    assert ocr._dpi(999_999, 999_999) is None
+    assert ocr._dpi(999_999, 72) is not None  # 13889 x 1 pixels at 1 dpi fit
 
 
 # ---- simulated programs ---------------------------------------------------------------
@@ -319,6 +326,8 @@ def test_the_installed_languages_in_nodestro_order(programs: Programs) -> None:
         ({"pdftoppm": "tiny"}, "page 1 could not be rendered"),
         ({"pdftoppm": "broken"}, "page 1 could not be rendered"),
         ({"tesseract": "fail-page-2"}, "page 2 failed"),
+        # Above MAX_PAGE_PIXELS even at MIN_DPI (193 Mpx at 1 dpi): refused before pdftoppm runs.
+        ({"width": 999999, "height": 999999}, "page 1 is too large to render"),
     ],
 )
 def test_failures_are_reported_with_the_step(

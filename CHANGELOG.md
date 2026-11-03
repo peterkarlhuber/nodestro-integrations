@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A page above `MAX_PAGE_PIXELS` even at the lowest resolution (1 dpi, `MIN_DPI`) is refused with
+  `document.ocr_failed` (`<name>: page N is too large to render`) instead of being rendered beyond the limit; the
+  resolution also accounts for poppler rounding up to whole pixels (audit ORK2-05).
 - Pin nodestro-runtime bcfea7f (security review round 4 Lows R4-3 to R4-7, runtime #95; real-engine resolve tests
   and orkexa 0861c1b, #94; Axentra 2767a2e; 2026-11-02). Nothing changes in this package.
 - Pin nodestro-runtime 96f14ef (static tenant SQL check round-3 gaps, #89; tool generation jobs stopped on tenant
