@@ -70,7 +70,7 @@ without the runtime's upload checks:
 | Limit | Value |
 | --- | --- |
 | Pages per document | 50 (`MAX_PAGES`) |
-| Pixels per rendered page | 40 million (`MAX_PAGE_PIXELS`): A1 and smaller at 200 dpi, larger pages at a lower resolution |
+| Pixels per rendered page | 40 million (`MAX_PAGE_PIXELS`): A1 and smaller at 200 dpi, larger pages at a lower resolution; a page above the limit even at 1 dpi is refused (`page N is too large to render`) |
 | One program call | 300 s (`STEP_SECONDS`) |
 | The whole document | 900 s (`MAX_SECONDS`) |
 | Threads per tesseract call | 1 (`OMP_THREAD_LIMIT`, unless set), so parallel documents do not compete for every core |
@@ -169,8 +169,7 @@ the page limit, failures, timeouts, the environment and temporary files. The tes
 real programs and the scans in `tests/data/`; they are skipped when the programs or languages are missing, except
 with `NODESTRO_REQUIRE_REAL_OCR=1`, which CI sets so that they can never be skipped unnoticed.
 
-CI needs the repository secret `NODESTRO_READ` (read access to orkexa and the Nodestro repositories); it is
-available only to the steps that install the private dependencies.
+CI needs no secret: orkexa and the Nodestro repositories are public and are installed anonymously.
 
 Open work (release blockers, known gaps, follow-ups) is listed in [docs/TODO.md](docs/TODO.md).
 

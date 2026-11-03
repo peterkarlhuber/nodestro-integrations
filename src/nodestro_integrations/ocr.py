@@ -10,8 +10,8 @@ Nodestro shows OCR as not installed.
 
 Limits that keep an untrusted PDF from exhausting the computer: at most :data:`MAX_PAGES`
 pages, at most :data:`MAX_PAGE_PIXELS` pixels per rendered page (larger pages are rendered at
-a lower resolution than :data:`DPI`), a timeout per program call and :data:`MAX_SECONDS` for
-the whole document.
+a lower resolution than :data:`DPI`; a page above the limit even at :data:`MIN_DPI` is refused),
+a timeout per program call and :data:`MAX_SECONDS` for the whole document.
 
 The engine is registered as the integration ``tesseract-ocr`` (entry point group
 ``nodestro.integrations``, see :mod:`nodestro_runtime.extensions`).
@@ -40,6 +40,8 @@ MAX_PAGES = 50
 DPI = 200
 #: Pixels of one rendered page at most (A1 fits at 200 dpi); larger pages get a lower resolution.
 MAX_PAGE_PIXELS = 40_000_000
+#: The lowest rendering resolution; a page above :data:`MAX_PAGE_PIXELS` even at this resolution is refused.
+MIN_DPI = 1
 #: Seconds one program call may take.
 STEP_SECONDS = 300
 #: Seconds the whole document may take.
@@ -189,12 +191,25 @@ def page_count(source: Path) -> int | None:
         return None
 
 
-def _dpi(width: float, height: float) -> int:
-    """The resolution for a page of ``width`` x ``height`` points: :data:`DPI` within :data:`MAX_PAGE_PIXELS`."""
+def _pixels(width: float, height: float, dpi: int) -> int:
+    """Pixels of a page of ``width`` x ``height`` points rendered at ``dpi`` (as poppler rounds: up)."""
+    return math.ceil(width * dpi / 72) * math.ceil(height * dpi / 72)
+
+
+def _dpi(width: float, height: float) -> int | None:
+    """The resolution for a page of ``width`` x ``height`` points: :data:`DPI` within :data:`MAX_PAGE_PIXELS`.
+
+    ``None`` when the page exceeds :data:`MAX_PAGE_PIXELS` even at :data:`MIN_DPI`: such a page is
+    refused instead of rendered beyond the limit.
+    """
     square_inches = (width / 72) * (height / 72)
     if square_inches <= 0:
         return DPI
-    return max(1, min(DPI, int(math.sqrt(MAX_PAGE_PIXELS / square_inches))))
+    dpi = min(DPI, int(math.sqrt(MAX_PAGE_PIXELS / square_inches)))
+    # Rounding up to whole pixels can exceed the limit by a row or column: step down until it fits.
+    while dpi >= MIN_DPI and _pixels(width, height, dpi) > MAX_PAGE_PIXELS:
+        dpi -= 1
+    return dpi if dpi >= MIN_DPI else None
 
 
 def _png_size(path: Path) -> tuple[int, int] | None:
@@ -267,7 +282,8 @@ def run_ocr(data: bytes, name: str) -> OcrResult:
 
     Raises :class:`~nodestro_runtime.documents.DocumentError`: ``document.ocr_unavailable``
     without the programs or their languages, ``document.ocr_failed`` for a damaged or
-    password-protected PDF, a page that cannot be rendered or recognized, or a timeout.
+    password-protected PDF, a page that cannot be rendered or recognized, a page too large to
+    render within :data:`MAX_PAGE_PIXELS`, or a timeout.
     """
     programs = _programs()
     if programs is None:
@@ -304,6 +320,8 @@ def run_ocr(data: bytes, name: str) -> OcrResult:
                     raise DocumentError("document.ocr_failed", f"{name}: {step} has no size", name=name)
                 width, height = sizes[number]
                 dpi = _dpi(width, height)
+                if dpi is None:
+                    raise DocumentError("document.ocr_failed", f"{name}: {step} is too large to render", name=name)
                 image = folder / f"page-{number}.png"
                 pages = ["-f", str(number), "-l", str(number), "-r", str(dpi), "-cropbox", "-singlefile"]
                 rendered = _run([programs["pdftoppm"], *pages, "-png", source.name, image.stem], deadline, cwd=folder)
