@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-03 against `master` at `78413ac` (close-out of the backend audit round 2).
+> **Last full review:** 2026-11-04 against `master` at `f299ecf` (internal backend audit round 3; only runtime pin bumps since `78413ac`).
 
 ## Summary
 
