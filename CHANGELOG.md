@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Pin nodestro-runtime 7cb9b4b (runtime #107: a local judge answers without thinking in the CPU saving mode, longer
+  request timeout for local model servers).
 - Pin nodestro-runtime 3006ce0 (runtime #106: CPU saving mode, local model hints, `recommend(require=)`, evidence-weighted hybrid search).
 - Pin nodestro-runtime 7b9f4f7 (local models, embeddings and semantic knowledge search, runtime #99, #101, #102;
   orkexa 9b06a5e, #42; 2026-11-03). Nothing changes in this package.
