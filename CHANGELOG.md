@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Pin nodestro-runtime 40c8c06 (runtime #113, backend audit round 3: key-figure checks, event-loop safety, cancel of local model requests, `reindex_required`, catalog `license_source`; orkexa e9c2147, axentra 0a1d1cc). No change to this package.
 - Pin nodestro-runtime c6f0240 (runtime #112: orkexa 22f2910, Ollama runtime for another platform than the host's, for the portable export). Nothing changes in this package.
 - Pin nodestro-runtime 2f1de71 (runtime #108: checked key figures, `table_totals`; #109 and #110: orkexa 6e61862, local Ollama agents with a structured result call their tools and answer in the conversation's language; a calculator echo backs no checked value). Nothing changes in this package.
 - Pin nodestro-runtime 7cb9b4b (runtime #107: a local judge answers without thinking in the CPU saving mode, longer
