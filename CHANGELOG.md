@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Pin nodestro-runtime 9daad81 (runtime #108: checked key figures, `table_totals`). Nothing changes in this package.
+- Pin nodestro-runtime d0fee19 (runtime #108: checked key figures, `table_totals`; runtime #109: orkexa 014144b, local Ollama agents with a structured result call their tools). Nothing changes in this package.
 - Pin nodestro-runtime 7cb9b4b (runtime #107: a local judge answers without thinking in the CPU saving mode, longer
   request timeout for local model servers).
 - Pin nodestro-runtime 3006ce0 (runtime #106: CPU saving mode, local model hints, `recommend(require=)`, evidence-weighted hybrid search).
