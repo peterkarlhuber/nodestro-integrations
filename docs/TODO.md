@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-04 against `master` at `f299ecf` (internal backend audit round 3; only runtime pin bumps since `78413ac`).
+> **Last full review:** 2026-11-05 against `master` at `8687e09` (quality round 3 close-out; TODO consolidated).
 
 ## Summary
 
@@ -15,7 +15,8 @@
 | P3 Low | 2 |
 | P4 Optional | 4 |
 
-**Release blockers:** None for this repository.
+**Release blockers:** None. No entry blocks the frozen desktop candidate v0.2.0-preview.1 or the next preview;
+every entry below is not a release blocker. None needs an external security review.
 
 The package (local OCR of scanned PDFs) is small and well covered: no TODO markers or
 skipped tests in the code, real-OCR tests that CI cannot skip, a dependency audit and SHA-pinned actions. What remains
@@ -41,7 +42,7 @@ None known.
 ### INT-001 · Resource hardening of OCR for many parallel documents
 
 - **Priority:** P3 Low · **Status:** Needs decision · **Refs:** identified in this inventory; backend audit
-  2026-11-03 (ORK2-05)
+  2026-11-03 (ORK2-05, re-verified in round 3)
 - **What:** Limits apply per document (pages, pixels, time, one thread per tesseract call). How many documents are
   recognized at the same time in one process is not bounded here, and behavior under parallel load in the server
   profile is not measured. The per-page pixel bound itself could be exceeded (a page larger than the limit even at
@@ -132,7 +133,7 @@ None known.
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
-| INT-001 | nodestro-runtime | pointer in its cross-repo table (no RT entry yet) | The bound may belong where the runtime calls OCR. |
+| INT-001 | nodestro-runtime | pointer row in its cross-repo table (no RT entry; this entry owns the topic) | The bound may belong where the runtime calls OCR. |
 
 ## CI access to private repositories
 
