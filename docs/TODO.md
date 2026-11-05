@@ -133,6 +133,7 @@ None known.
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
+| (pointer) | nodestro-studio | ST-052 (Dependabot policy: weekly groups, cooldown, manual merge; auto-merge prerequisites) | Full entry in studio |
 | INT-001 | nodestro-runtime | pointer row in its cross-repo table (no RT entry; this entry owns the topic) | The bound may belong where the runtime calls OCR. |
 
 ## CI access to private repositories
