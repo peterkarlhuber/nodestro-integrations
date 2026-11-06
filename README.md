@@ -78,7 +78,10 @@ without the runtime's upload checks:
 
 Measured with tesseract 5.3 on one CPU core: about 1 s per A4 page, plus about 4 s per document for finding the
 main language when all six languages are installed (about 1 s with two). The programs use about 150 MB for A4 pages
-and up to about 700 MB for the largest pages.
+and up to about 700 MB for the largest pages. Cheaper ways to find the main language were measured on 2026-11-06 with the two
+test scans (tesseract 5.3.4, one thread) and rejected: reading page 1 at 100 dpi saved up to 20 % but chose Spanish
+for the German scan, reading only the top half of the page chose Italian for the rotated Spanish scan, and
+tesseract's script detection (`--psm 0`) reports only "Latin", which all six languages share.
 
 ### Quality
 
