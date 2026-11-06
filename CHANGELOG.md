@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Pins nodestro-runtime b29b738 (runtime #121: semantic reindex as a server job, RT-046; TODO abatement round 3).
 - CI runs the tests on Python 3.12 too, and the real-OCR tests on macOS (Homebrew) and Windows (Chocolatey, with
   the Nodestro languages from tessdata_fast at a pinned commit, SHA-256 checked) in a CI job that passed on both and is blocking (INT-002).
   The README says that a `TESSDATA_PREFIX` folder also needs tesseract's `configs/tsv`.
