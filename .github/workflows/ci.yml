@@ -58,10 +58,9 @@ jobs:
 
   platforms:
     # INT-002: the real OCR programs on macOS (Homebrew) and Windows (UB Mannheim tesseract, poppler from
-    # Chocolatey). Non-blocking until both have passed once; then remove continue-on-error.
+    # Chocolatey). Both passed on 2026-11-06 (PR #66), so the job is blocking.
     name: real OCR (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
     timeout-minutes: 30
     strategy:
       fail-fast: false

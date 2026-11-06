@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 0 |
 | P2 Medium | 0 |
-| P3 Low | 2 |
+| P3 Low | 1 |
 | P4 Optional | 3 |
 
 **Release blockers:** None. No entry blocks the frozen desktop candidate v0.2.0-preview.1 or the next preview;
@@ -73,16 +73,6 @@ None known.
 None known.
 
 ## Platform coverage
-
-### INT-002 · OCR on macOS and Windows has no recorded CI run yet
-
-- **Priority:** P3 Low · **Status:** Open · **Refs:** README "Installation", `.github/workflows/ci.yml` (`platforms`)
-- **What:** Since 2026-11-06 CI runs Ubuntu with Python 3.11, 3.12 and 3.13 (3.12 also passed locally with the real
-  programs), and a non-blocking job installs the programs on macOS (Homebrew) and Windows (Chocolatey, languages from
-  tessdata_fast) and runs the real-OCR tests (on Windows only those: the simulated programs are POSIX scripts). That
-  job has not run yet, so the Homebrew and Windows paths are still unproven.
-- **Next step:** After the first run on `master`, fix what fails, record the result in the README table and remove
-  `continue-on-error`.
 
 ## Documentation
 

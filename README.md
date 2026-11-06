@@ -40,8 +40,8 @@ OCR also needs three programs on `PATH` and tesseract language data for at least
 | System | Command |
 | --- | --- |
 | Debian, Ubuntu (tested in CI) | `sudo apt-get install tesseract-ocr poppler-utils tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-fra tesseract-ocr-por tesseract-ocr-ita` |
-| macOS (Homebrew; non-blocking CI job, no recorded run yet) | `brew install tesseract tesseract-lang poppler` |
-| Windows (non-blocking CI job with the real-OCR tests, no recorded run yet) | tesseract from the [UB Mannheim builds](https://github.com/UB-Mannheim/tesseract/wiki) and poppler from [poppler-windows](https://github.com/oschwartz10612/poppler-windows) (CI: `choco install tesseract poppler`); add both `bin` folders to `PATH`. Add the languages you need to tesseract's `tessdata` folder. |
+| macOS (Homebrew; CI job with the real-OCR tests, passed 2026-11-06) | `brew install tesseract tesseract-lang poppler` |
+| Windows (CI job with the real-OCR tests, passed 2026-11-06) | tesseract from the [UB Mannheim builds](https://github.com/UB-Mannheim/tesseract/wiki) and poppler from [poppler-windows](https://github.com/oschwartz10612/poppler-windows) (CI: `choco install tesseract poppler`); add both `bin` folders to `PATH`. Add the languages you need to tesseract's `tessdata` folder. |
 
 The programs are `tesseract` (4 or newer; tested with 5.3), `pdftoppm` and `pdfinfo` (both from poppler). Check
 with `tesseract --list-langs`: the languages used are `deu`, `eng`, `spa`, `fra`, `por` and `ita`, as far as they
