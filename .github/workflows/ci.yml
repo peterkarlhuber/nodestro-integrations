@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.11", "3.13"]
+        python: ["3.11", "3.12", "3.13"]
     env:
       # The real OCR tests fail instead of being skipped when a program or language is missing.
       NODESTRO_REQUIRE_REAL_OCR: "1"
@@ -55,6 +55,71 @@ jobs:
           pip install pip-audit==2.10.1
           args=(); for id in $PIP_AUDIT_IGNORE; do args+=(--ignore-vuln "$id"); done
           pip-audit --skip-editable --progress-spinner off "${args[@]}"
+
+  platforms:
+    # INT-002: the real OCR programs on macOS (Homebrew) and Windows (UB Mannheim tesseract, poppler from
+    # Chocolatey). Both passed on 2026-11-06 (PR #66), so the job is blocking.
+    name: real OCR (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    env:
+      NODESTRO_REQUIRE_REAL_OCR: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install tesseract and poppler (Homebrew)
+        if: runner.os == 'macOS'
+        run: brew install tesseract tesseract-lang poppler
+      - name: Install tesseract and poppler (Chocolatey)
+        if: runner.os == 'Windows'
+        run: |
+          choco install -y --no-progress tesseract poppler
+          echo "C:\\Program Files\\Tesseract-OCR" >> "$GITHUB_PATH"
+      # The Windows installer brings eng and osd. The other languages come from tessdata_fast at a pinned commit
+      # (the same files as Ubuntu's packages), checked by SHA-256, into the installer's tessdata folder: that
+      # folder also holds configs/tsv, which the TSV output needs.
+      - name: Add the Nodestro languages (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          tessdata="/c/Program Files/Tesseract-OCR/tessdata"
+          base=https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/87416418657359cb625c412a48b6e1d6d41c29bd
+          while read -r sum lang; do
+            curl -sSfL -o "$RUNNER_TEMP/$lang.traineddata" "$base/$lang.traineddata"
+            echo "$sum  $RUNNER_TEMP/$lang.traineddata" | sha256sum -c -
+            cp "$RUNNER_TEMP/$lang.traineddata" "$tessdata/"
+          done <<'EOF'
+          19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d deu
+          6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464 spa
+          ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca fra
+          c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb por
+          b8f89e1e785118dac4d51ae042c029a64edb5c3ee42ef73027a6d412748d8827 ita
+          EOF
+      - name: Show the programs
+        run: |
+          tesseract --version
+          tesseract --list-langs
+          pdftoppm -v
+          pdfinfo -v
+      - run: pip install -e ".[dev]"
+      # macOS runs the whole suite. The simulated programs are POSIX scripts, so Windows runs the real-OCR tests.
+      - name: Tests (macOS)
+        if: runner.os == 'macOS'
+        run: pytest
+      - name: Real-OCR tests (Windows)
+        if: runner.os == 'Windows'
+        run: pytest -k real_ocr -v
 
   package:
     # The wheel installs on its own, contains what the package needs at run time and registers the entry point.

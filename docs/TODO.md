@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-05 against `master` at `8687e09` (quality round 3 close-out; TODO consolidated).
+> **Last full review:** 2026-11-06 against `master` at `11a8271` (TODO abatement round).
 
 ## Summary
 
@@ -12,15 +12,15 @@
 | P0 Critical | 0 |
 | P1 High | 0 |
 | P2 Medium | 0 |
-| P3 Low | 2 |
-| P4 Optional | 4 |
+| P3 Low | 1 |
+| P4 Optional | 3 |
 
 **Release blockers:** None. No entry blocks the frozen desktop candidate v0.2.0-preview.1 or the next preview;
 every entry below is not a release blocker. None needs an external security review.
 
 The package (local OCR of scanned PDFs) is small and well covered: no TODO markers or
 skipped tests in the code, real-OCR tests that CI cannot skip, a dependency audit and SHA-pinned actions. What remains
-is hardening for the server profile, platform coverage and documented limits of OCR itself.
+is hardening for the server profile, the first macOS and Windows CI runs and documented limits of OCR itself.
 
 ## Priorities and statuses
 
@@ -74,14 +74,6 @@ None known.
 
 ## Platform coverage
 
-### INT-002 · OCR untested on macOS, Windows and Python 3.12
-
-- **Priority:** P3 Low · **Status:** Open · **Refs:** README "Installation", integrations quality round 2026-10-30
-- **What:** CI runs Ubuntu with Python 3.11 and 3.13 only. The Homebrew and Windows install paths are documented but
-  never run; Windows output decoding was fixed without a real Windows run. Load behavior in the server profile is not
-  measured (see INT-001).
-- **Next step:** Run the real-OCR tests once on macOS and Windows (or add CI jobs) and record the result in the README.
-
 ## Documentation
 
 None known.
@@ -92,12 +84,7 @@ None known.
 
 ## Later optimizations
 
-### INT-003 · Faster detection of the main language
-
-- **Priority:** P4 Optional · **Status:** Open · **Refs:** README "Limits", integrations quality round 2026-10-30
-- **What:** Reading the first page once per installed language costs about 4 s per document with all six languages.
-- **Next step:** Measure a cheaper probe (e.g. a crop of the first page or tesseract's script detection) against the
-  accent-preservation tests before changing anything.
+None known.
 
 ## Accepted risks
 

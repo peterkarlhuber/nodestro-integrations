@@ -14,6 +14,7 @@ authors = [{ name = "Peter Karlhuber" }]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Text Processing",
     "Typing :: Typed",
@@ -21,7 +22,7 @@ classifiers = [
 dependencies = [
     # The extension contract (nodestro_runtime.extensions, contract 1). tesseract and poppler are programs,
     # not Python packages: see README.md.
-    "nodestro-runtime @ git+https://github.com/peterkarlhuber/nodestro-runtime.git@62527d141c152ea7b06f38b255e2f11c72fb68fc",
+    "nodestro-runtime @ git+https://github.com/peterkarlhuber/nodestro-runtime.git@3d697028df974170bb96738f3b49979a8896a196",
 ]
 
 [project.optional-dependencies]

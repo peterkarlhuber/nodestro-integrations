@@ -40,13 +40,14 @@ OCR also needs three programs on `PATH` and tesseract language data for at least
 | System | Command |
 | --- | --- |
 | Debian, Ubuntu (tested in CI) | `sudo apt-get install tesseract-ocr poppler-utils tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-fra tesseract-ocr-por tesseract-ocr-ita` |
-| macOS (Homebrew, not tested in CI) | `brew install tesseract tesseract-lang poppler` |
-| Windows (not tested) | tesseract from the [UB Mannheim builds](https://github.com/UB-Mannheim/tesseract/wiki) and poppler from [poppler-windows](https://github.com/oschwartz10612/poppler-windows); add both `bin` folders to `PATH`. |
+| macOS (Homebrew; CI job with the real-OCR tests, passed 2026-11-06) | `brew install tesseract tesseract-lang poppler` |
+| Windows (CI job with the real-OCR tests, passed 2026-11-06) | tesseract from the [UB Mannheim builds](https://github.com/UB-Mannheim/tesseract/wiki) and poppler from [poppler-windows](https://github.com/oschwartz10612/poppler-windows) (CI: `choco install tesseract poppler`); add both `bin` folders to `PATH`. Add the languages you need to tesseract's `tessdata` folder. |
 
 The programs are `tesseract` (4 or newer; tested with 5.3), `pdftoppm` and `pdfinfo` (both from poppler). Check
 with `tesseract --list-langs`: the languages used are `deu`, `eng`, `spa`, `fra`, `por` and `ita`, as far as they
 are installed. `osd` (installed with tesseract on Debian, Ubuntu and Homebrew) lets tesseract turn pages that were
-scanned sideways or upside down. `TESSDATA_PREFIX` points tesseract to another language data folder.
+scanned sideways or upside down. `TESSDATA_PREFIX` points tesseract to another language data folder; that folder also needs tesseract's `configs/tsv`
+(copy the `configs` folder of the installation), or no text is read.
 
 ## The OCR
 
@@ -77,7 +78,10 @@ without the runtime's upload checks:
 
 Measured with tesseract 5.3 on one CPU core: about 1 s per A4 page, plus about 4 s per document for finding the
 main language when all six languages are installed (about 1 s with two). The programs use about 150 MB for A4 pages
-and up to about 700 MB for the largest pages.
+and up to about 700 MB for the largest pages. Cheaper ways to find the main language were measured on 2026-11-06 with the two
+test scans (tesseract 5.3.4, one thread) and rejected: reading page 1 at 100 dpi saved up to 20 % but chose Spanish
+for the German scan, reading only the top half of the page chose Italian for the rotated Spanish scan, and
+tesseract's script detection (`--psm 0`) reports only "Latin", which all six languages share.
 
 ### Quality
 
