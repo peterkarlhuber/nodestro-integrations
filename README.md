@@ -75,6 +75,8 @@ without the runtime's upload checks:
 | One program call | 300 s (`STEP_SECONDS`) |
 | The whole document | 900 s (`MAX_SECONDS`) |
 | Threads per tesseract call | 1 (`OMP_THREAD_LIMIT`, unless set), so parallel documents do not compete for every core |
+| Documents at the same time | 2 per process (`MAX_PARALLEL`, set with `NODESTRO_OCR_PARALLEL`, 1 to 64); further documents wait, and the wait counts against their 900 s |
+| Memory per program call | 2 GiB of address space (`MAX_PROGRAM_BYTES`, set with `NODESTRO_OCR_PROGRAM_BYTES`, at least 256 MiB), as `RLIMIT_AS` on Linux; a program that needs more fails and the page is reported as failed. macOS does not enforce this limit and Windows has none, so it is not applied there |
 
 Measured with tesseract 5.3 on one CPU core: about 1 s per A4 page, plus about 4 s per document for finding the
 main language when all six languages are installed (about 1 s with two). The programs use about 150 MB for A4 pages
@@ -111,6 +113,8 @@ programs. A valid PDF without recognizable text gives an empty text, not an erro
   and the variables Windows needs. API keys, tokens, proxy settings and other variables of the calling process are
   not passed on. This limits what a misbehaving program could leak; the programs still run with the rights of the
   current user, so a poppler or tesseract with a known vulnerability should be updated.
+- On Linux each program call starts with an address space limit (`RLIMIT_AS`, see "Limits"), and one process
+  recognizes only a few documents at a time, so a hostile PDF or many uploads at once cannot take all memory.
 - The integration logs nothing and keeps no copy of a document; storing files and texts is the runtime's job.
 
 ## Writing an integration
