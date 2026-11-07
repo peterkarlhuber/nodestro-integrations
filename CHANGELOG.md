@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Pins nodestro-runtime 099f4d4 (runtime #130/#131/#132: MUP-ONA B1 orkexa conformance suite with orkexa b3d6fae, B3 PostgreSQL ranking drift fixes and bounded reindex switch, new error `agent.VectorError` and query limit `query.too_long`; sandbox gateway keeps attached streams alive).
 - At most two documents per process are recognized at the same time (`NODESTRO_OCR_PARALLEL`, 1 to 64); others
   wait within their 900 s. On Linux each poppler and tesseract call starts with a 2 GiB address space limit
   (`RLIMIT_AS`, `NODESTRO_OCR_PROGRAM_BYTES`); a program that needs more fails the page (INT-001, INT-004).
