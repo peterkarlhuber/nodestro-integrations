@@ -3,7 +3,7 @@
 > Open work for this repository: release blockers, known bugs, security follow-ups, technical debt and planned improvements.
 > GitHub issues are the source of truth for details; this file is the entry point and summary.
 >
-> **Last full review:** 2026-11-06 against `master` at `11a8271` (TODO abatement round).
+> **Last full review:** 2026-11-06 against master at a0018e0 (TODO abatement round)
 
 ## Summary
 
@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 0 |
 | P2 Medium | 0 |
-| P3 Low | 1 |
+| P3 Low | 0 |
 | P4 Optional | 3 |
 
 **Release blockers:** None. No entry blocks the frozen desktop candidate v0.2.0-preview.1 or the next preview;
@@ -20,7 +20,8 @@ every entry below is not a release blocker. None needs an external security revi
 
 The package (local OCR of scanned PDFs) is small and well covered: no TODO markers or
 skipped tests in the code, real-OCR tests that CI cannot skip, a dependency audit and SHA-pinned actions. What remains
-is hardening for the server profile, the first macOS and Windows CI runs and documented limits of OCR itself.
+is the accepted risk that the OCR programs run unsandboxed (bounded in memory on Linux and in parallel documents
+since round 4) and documented limits of OCR itself.
 
 ## Priorities and statuses
 
@@ -39,18 +40,7 @@ None known.
 
 ## Security
 
-### INT-001 · Resource hardening of OCR for many parallel documents
-
-- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** identified in this inventory; backend audit
-  2026-11-03 (ORK2-05, re-verified in round 3)
-- **What:** Limits apply per document (pages, pixels, time, one thread per tesseract call). How many documents are
-  recognized at the same time in one process is not bounded here, and behavior under parallel load in the server
-  profile is not measured. The per-page pixel bound itself could be exceeded (a page larger than the limit even at
-  1 dpi was rendered anyway, 193 Mpx, about 750 MB for poppler); since the 2026-11-03 fix such pages are refused,
-  so the per-document memory bound now holds, but parallel documents still multiply it.
-- **Next step:** Decide whether the bound belongs in this package or in the runtime's knowledge and input-file
-  handling, then add it with a test and document it under "Limits".
-- **Depends on:** possibly nodestro-runtime (where OCR is called)
+None known.
 
 ## Bugs and reliability
 
@@ -96,9 +86,12 @@ None known.
 - **Reason:** These are maintained system packages; isolating them would need the container sandbox. Keeping them
   updated is the operator's job and is documented. Re-evaluate before any production server deployment.
 - **Re-evaluated 2026-11-03:** still acceptable for the desktop. For the server profile the risk is resource
-  exhaustion more than code execution: there is no address-space limit for the programs (RLIMIT_AS on POSIX) and no
-  bound on parallel documents (INT-001). Before a server deployment, add RLIMIT_AS for poppler and tesseract or run
-  OCR in the container sandbox.
+  exhaustion more than code execution.
+- **Hardened 2026-11-07:** on Linux every program call starts with an address space limit (`RLIMIT_AS`, 2 GiB,
+  `NODESTRO_OCR_PROGRAM_BYTES`), and one process recognizes at most two documents at a time (`NODESTRO_OCR_PARALLEL`;
+  INT-001 is done). macOS does not enforce `RLIMIT_AS` and Windows has no such limit, so there only the per-document
+  bounds apply. What stays accepted: the programs parse untrusted PDFs with the user's rights and are not isolated.
+  Run OCR in the container sandbox if a server deployment needs more than that.
 
 ### INT-005 · OCR quality limits (multi-column order, poor scans)
 
@@ -121,7 +114,6 @@ None known.
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
 | (pointer) | nodestro-studio | ST-052 (Dependabot policy: weekly groups, cooldown, manual merge; auto-merge prerequisites) | Full entry in studio |
-| INT-001 | nodestro-runtime | pointer row in its cross-repo table (no RT entry; this entry owns the topic) | The bound may belong where the runtime calls OCR. |
 
 ## CI access to private repositories
 

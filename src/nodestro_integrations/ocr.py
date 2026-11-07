@@ -11,7 +11,9 @@ Nodestro shows OCR as not installed.
 Limits that keep an untrusted PDF from exhausting the computer: at most :data:`MAX_PAGES`
 pages, at most :data:`MAX_PAGE_PIXELS` pixels per rendered page (larger pages are rendered at
 a lower resolution than :data:`DPI`; a page above the limit even at :data:`MIN_DPI` is refused),
-a timeout per program call and :data:`MAX_SECONDS` for the whole document.
+a timeout per program call and :data:`MAX_SECONDS` for the whole document. Per process, at most
+:data:`MAX_PARALLEL` documents are recognized at the same time (others wait within their time limit), and on Linux
+each program gets at most :data:`MAX_PROGRAM_BYTES` of address space (``RLIMIT_AS``).
 
 The engine is registered as the integration ``tesseract-ocr`` (entry point group
 ``nodestro.integrations``, see :mod:`nodestro_runtime.extensions`).
@@ -25,7 +27,9 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import threading
 import time
 
 from nodestro_runtime.documents import DocumentError, OcrResult
@@ -46,6 +50,12 @@ MIN_DPI = 1
 STEP_SECONDS = 300
 #: Seconds the whole document may take.
 MAX_SECONDS = 900
+#: Documents recognized at the same time in one process (``NODESTRO_OCR_PARALLEL``, 1 to 64); the others wait,
+#: and the wait counts against their :data:`MAX_SECONDS`. Each document needs up to about 700 MB (largest pages).
+MAX_PARALLEL = 2
+#: Address space one program call may use (``NODESTRO_OCR_PROGRAM_BYTES``, at least 256 MiB): ``RLIMIT_AS`` on POSIX
+#: systems that enforce it (Linux); a program that needs more fails and the page is reported as failed.
+MAX_PROGRAM_BYTES = 2 * 1024**3
 #: Tesseract language codes of Nodestro's six languages, in the default order.
 LANGUAGES = ("deu", "eng", "spa", "fra", "por", "ita")
 
@@ -103,6 +113,76 @@ def program_environment() -> dict[str, str]:
     return environment
 
 
+def _setting(name: str, default: int, low: int, high: int) -> int:
+    """An integer from the environment within ``low`` and ``high``; the default when unset or invalid."""
+    try:
+        value = int(os.environ.get(name, "").strip())
+    except ValueError:
+        return default
+    return min(max(value, low), high)
+
+
+def max_parallel() -> int:
+    """How many documents this process recognizes at the same time (:data:`MAX_PARALLEL` unless configured)."""
+    return _setting("NODESTRO_OCR_PARALLEL", MAX_PARALLEL, 1, 64)
+
+
+def max_program_bytes() -> int:
+    """The address space limit of one program call (:data:`MAX_PROGRAM_BYTES` unless configured)."""
+    return _setting("NODESTRO_OCR_PROGRAM_BYTES", MAX_PROGRAM_BYTES, 256 * 1024**2, 1024**4)
+
+
+class _Slots:
+    """At most :func:`max_parallel` documents at a time; the limit is read when a document asks for a slot."""
+
+    def __init__(self) -> None:
+        self._changed = threading.Condition()
+        self._busy = 0
+
+    @property
+    def busy(self) -> int:
+        with self._changed:
+            return self._busy
+
+    def acquire(self, deadline: float) -> bool:
+        with self._changed:
+            while self._busy >= max_parallel():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                self._changed.wait(remaining)
+            self._busy += 1
+            return True
+
+    def release(self) -> None:
+        with self._changed:
+            self._busy -= 1
+            self._changed.notify_all()
+
+
+_SLOTS = _Slots()
+
+#: Runs the program given after the limit with ``RLIMIT_AS`` set (``exec``: the same process, the same arguments).
+#: A system that does not enforce the limit (macOS) or refuses it runs the program without one.
+_LIMITER = (
+    "import os, sys\n"
+    "try:\n"
+    "    import resource\n"
+    "    limit = int(sys.argv[1])\n"
+    "    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))\n"
+    "except (ImportError, ValueError, OSError):\n"
+    "    pass\n"
+    "os.execv(sys.argv[2], sys.argv[2:])\n"
+)
+
+
+def _limited(command: list[str]) -> list[str]:
+    """``command`` with its address space limited (Linux); unchanged where there is no such limit (Windows)."""
+    if os.name != "posix" or sys.platform == "darwin" or not sys.executable:
+        return command
+    return [sys.executable, "-I", "-S", "-c", _LIMITER, str(max_program_bytes()), *command]
+
+
 def _programs() -> dict[str, str] | None:
     """The full paths of the programs (``None`` when one is missing)."""
     found = {name: shutil.which(name) for name in ("tesseract", "pdftoppm", "pdfinfo")}
@@ -118,7 +198,7 @@ def _run(command: list[str], deadline: float, cwd: Path | None = None) -> subpro
     if remaining <= 0:
         raise subprocess.TimeoutExpired(command, 0)
     return subprocess.run(
-        command,
+        _limited(command),
         capture_output=True,
         encoding="utf-8",
         errors="replace",
@@ -295,6 +375,19 @@ def run_ocr(data: bytes, name: str) -> OcrResult:
             f"OCR needs tesseract language data for one of {', '.join(LANGUAGES)} (see tesseract --list-langs)",
         )
     deadline = time.monotonic() + MAX_SECONDS
+    if not _SLOTS.acquire(deadline):
+        raise DocumentError(
+            "document.ocr_failed", f"{name}: timed out waiting for other documents to be recognized", name=name
+        )
+    try:
+        return _recognize_document(programs, languages, data, name, deadline)
+    finally:
+        _SLOTS.release()
+
+
+def _recognize_document(
+    programs: dict[str, str], languages: list[str], data: bytes, name: str, deadline: float
+) -> OcrResult:
     temporary: tempfile.TemporaryDirectory[str] | None = None
     try:
         # A folder of its own (readable by this user only), removed with everything in it at the end.

@@ -9,6 +9,7 @@ from pathlib import Path
 import stat
 import sys
 import tempfile
+import threading
 import time
 
 from nodestro_runtime.documents import DocumentError
@@ -106,13 +107,26 @@ here = Path(__file__).resolve().parent
 config = json.loads((here / "config.json").read_text())
 program = Path(sys.argv[0]).name
 args = sys.argv[1:]
+try:
+    import resource
+    address_space = resource.getrlimit(resource.RLIMIT_AS)[0]
+except ImportError:
+    address_space = None
 with (here / "calls.jsonl").open("a") as log:
-    log.write(json.dumps({"program": program, "args": args, "env": dict(os.environ), "cwd": os.getcwd()}) + "\n")
+    log.write(json.dumps({"program": program, "args": args, "env": dict(os.environ), "cwd": os.getcwd(),
+                          "start": time.time(), "address_space": address_space}) + "\n")
 
 def option(name, default=None):
     return args[args.index(name) + 1] if name in args else default
 
 behaviour = config.get(program, "ok")
+if program == "tesseract" and args != ["--list-langs"]:
+    time.sleep(config.get("delay", 0))
+    if config.get("allocate"):
+        try:
+            block = bytearray(config["allocate"])
+        except MemoryError:
+            sys.exit(3)
 if behaviour == "sleep" and args != ["--list-langs"]:
     time.sleep(30)
 if behaviour == "fail":
@@ -554,3 +568,112 @@ def test_real_ocr_through_knowledge_and_run_inputs(tmp_path: Path) -> None:
         assert "Text recognised by OCR (1 page," in extracted.text
     finally:
         workspace.close()
+
+
+# ---- parallel documents and memory (INT-001, INT-004) ----------------------------------------------------------
+
+
+def _documents_at_once(programs: Programs) -> int:
+    """How many documents overlapped: each document works in its own folder, from its first to its last call."""
+    spans: dict[str, list[float]] = {}
+    for call in programs.calls():
+        if call["args"] == ["--list-langs"]:
+            continue
+        start = float(call["start"])  # type: ignore[arg-type]
+        span = spans.setdefault(str(call["cwd"]), [start, start])
+        span[0], span[1] = min(span[0], start), max(span[1], start)
+    events = sorted([(start, 1) for start, _ in spans.values()] + [(end, -1) for _, end in spans.values()])
+    most = now = 0
+    for _, change in events:
+        now += change
+        most = max(most, now)
+    return most
+
+
+@pytest.mark.parametrize("parallel", [1, 2])
+def test_documents_wait_for_a_free_slot(
+    programs: Programs, monkeypatch: pytest.MonkeyPatch, temp_root: Path, parallel: int
+) -> None:
+    monkeypatch.setenv("NODESTRO_OCR_PARALLEL", str(parallel))
+    programs.set(pages=2, delay=0.4, languages=["eng"])
+    results: list[object] = []
+
+    def recognize(index: int) -> None:
+        results.append(ocr.run_ocr(b"%PDF-1.4", f"scan-{index}.pdf"))
+
+    threads = [threading.Thread(target=recognize, args=(index,)) for index in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(60)
+    assert len(results) == 4 and all(getattr(result, "pages", 0) == 2 for result in results)
+    assert _documents_at_once(programs) == parallel
+    assert ocr._SLOTS.busy == 0
+    assert list(temp_root.iterdir()) == []
+
+
+def test_waiting_for_a_slot_counts_against_the_time_limit(programs: Programs, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NODESTRO_OCR_PARALLEL", "1")
+    monkeypatch.setattr(ocr, "MAX_SECONDS", 0.5)
+    assert ocr._SLOTS.acquire(time.monotonic() + 1)
+    try:
+        started = time.monotonic()
+        error = _failure(lambda: ocr.run_ocr(b"%PDF-1.4", "scan.pdf"))
+        assert 0.4 < time.monotonic() - started < 5
+        assert error.code == "document.ocr_failed" and "timed out waiting" in str(error)
+        assert error.params["name"] == "scan.pdf"
+        assert not [call for call in programs.calls() if call["args"] != ["--list-langs"]]
+    finally:
+        ocr._SLOTS.release()
+    # A failed document frees its slot as well.
+    programs.set(pdfinfo="fail")
+    _failure(lambda: ocr.run_ocr(b"%PDF-1.4", "scan.pdf"))
+    assert ocr._SLOTS.busy == 0
+
+
+@pytest.mark.parametrize(
+    ("variable", "value", "read", "expected"),
+    [
+        ("NODESTRO_OCR_PARALLEL", "", ocr.max_parallel, ocr.MAX_PARALLEL),
+        ("NODESTRO_OCR_PARALLEL", "many", ocr.max_parallel, ocr.MAX_PARALLEL),
+        ("NODESTRO_OCR_PARALLEL", "0", ocr.max_parallel, 1),
+        ("NODESTRO_OCR_PARALLEL", "4", ocr.max_parallel, 4),
+        ("NODESTRO_OCR_PARALLEL", "1000", ocr.max_parallel, 64),
+        ("NODESTRO_OCR_PROGRAM_BYTES", "", ocr.max_program_bytes, ocr.MAX_PROGRAM_BYTES),
+        ("NODESTRO_OCR_PROGRAM_BYTES", "1", ocr.max_program_bytes, 256 * 1024**2),
+        ("NODESTRO_OCR_PROGRAM_BYTES", str(3 * 1024**3), ocr.max_program_bytes, 3 * 1024**3),
+    ],
+)
+def test_the_limits_can_be_configured_within_bounds(
+    monkeypatch: pytest.MonkeyPatch, variable: str, value: str, read: Callable[[], int], expected: int
+) -> None:
+    monkeypatch.setenv(variable, value)
+    assert read() == expected
+
+
+_LINUX = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="RLIMIT_AS is applied on Linux only")
+
+
+@_LINUX
+def test_each_program_runs_with_an_address_space_limit(programs: Programs, monkeypatch: pytest.MonkeyPatch) -> None:
+    ocr.run_ocr(b"%PDF-1.4", "scan.pdf")
+    calls = programs.calls()
+    assert {call["program"] for call in calls} == {"pdfinfo", "pdftoppm", "tesseract"}
+    assert {call["address_space"] for call in calls} == {ocr.MAX_PROGRAM_BYTES}
+    monkeypatch.setenv("NODESTRO_OCR_PROGRAM_BYTES", str(512 * 1024**2))
+    ocr.run_ocr(b"%PDF-1.4", "scan.pdf")
+    assert programs.calls()[-1]["address_space"] == 512 * 1024**2
+
+
+@_LINUX
+def test_a_program_that_needs_more_memory_fails_the_page(
+    programs: Programs, monkeypatch: pytest.MonkeyPatch, temp_root: Path
+) -> None:
+    monkeypatch.setenv("NODESTRO_OCR_PROGRAM_BYTES", str(256 * 1024**2))
+    programs.set(allocate=600 * 1024**2, languages=["eng"])
+    error = _failure(lambda: ocr.run_ocr(b"%PDF-1.4", "scan.pdf"))
+    assert error.code == "document.ocr_failed" and "page 1 failed" in str(error)
+    assert list(temp_root.iterdir()) == []
+    # The same allocation within the limit works.
+    monkeypatch.setenv("NODESTRO_OCR_PROGRAM_BYTES", str(2 * 1024**3))
+    assert ocr.run_ocr(b"%PDF-1.4", "scan.pdf").pages == 2
