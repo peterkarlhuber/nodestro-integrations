@@ -5,6 +5,7 @@
 - At most two documents per process are recognized at the same time (`NODESTRO_OCR_PARALLEL`, 1 to 64); others
   wait within their 900 s. On Linux each poppler and tesseract call starts with a 2 GiB address space limit
   (`RLIMIT_AS`, `NODESTRO_OCR_PROGRAM_BYTES`); a program that needs more fails the page (INT-001, INT-004).
+- Pins nodestro-runtime 5f8c0f0 (runtime #126: a busy sandbox image build stays `checking` (LD-020), Bedrock region in usage, registry facts before a download, `pgvector_status()`; includes the price-table date fix of runtime #125; TODO abatement round 4).
 - Pins nodestro-runtime b29b738 (runtime #121: semantic reindex as a server job, RT-046; TODO abatement round 3).
 - CI runs the tests on Python 3.12 too, and the real-OCR tests on macOS (Homebrew) and Windows (Chocolatey, with
   the Nodestro languages from tessdata_fast at a pinned commit, SHA-256 checked) in a CI job that passed on both and is blocking (INT-002).
