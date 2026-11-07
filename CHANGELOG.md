@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Pins nodestro-runtime d9c3d6e (runtime #136: MUP-ONA B2, orkexa 028faa1 with the SQLite backends in `orkexa.backends.sqlite`; #135 Axentra 60d83b3 with the A8 fixes; #134 PostgreSQL reindex switch under load; #133 real-daemon image tests).
 - Pins nodestro-runtime 099f4d4 (runtime #130/#131/#132: MUP-ONA B1 orkexa conformance suite with orkexa b3d6fae, B3 PostgreSQL ranking drift fixes and bounded reindex switch, new error `agent.VectorError` and query limit `query.too_long`; sandbox gateway keeps attached streams alive).
 - At most two documents per process are recognized at the same time (`NODESTRO_OCR_PARALLEL`, 1 to 64); others
   wait within their 900 s. On Linux each poppler and tesseract call starts with a 2 GiB address space limit
