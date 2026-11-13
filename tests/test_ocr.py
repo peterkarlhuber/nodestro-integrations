@@ -13,7 +13,7 @@ import threading
 import time
 
 from nodestro_runtime.documents import DocumentError
-from nodestro_runtime.extensions import CONTRACT, Extensions, Integration, OcrEngine, discover
+from nodestro_runtime.extensions import SUPPORTED_CONTRACTS, Extensions, Integration, OcrEngine, discover
 from nodestro_runtime.schemas import SettingsIn
 from nodestro_runtime.workspace import Workspace
 import pytest
@@ -438,16 +438,17 @@ def test_the_integration_is_registered_by_installation() -> None:
     found = {item.name: item for item in discover()}
     assert "tesseract-ocr" in found
     item = found["tesseract-ocr"]
-    assert item.contract == CONTRACT and isinstance(item.ocr, ocr.TesseractOcr)
+    assert item.contract == 1 and isinstance(item.ocr, ocr.TesseractOcr)
     assert isinstance(item, Integration)
     assert item.version == ocr.__version__ and item.tools == ()
     assert Extensions([item]).summary() == [
-        {"name": "tesseract-ocr", "version": item.version, "tools": [], "ocr": "tesseract"}
+        {"name": "tesseract-ocr", "version": item.version, "tools": [], "contract": 1, "ocr": "tesseract"}
     ]
 
 
 def test_the_integration_states_its_contract() -> None:
-    assert ocr.integration().contract == 1 == CONTRACT
+    # Contract 1, which the runtime still accepts (it is at contract 2 since ADR-0001).
+    assert ocr.integration().contract == 1 and 1 in SUPPORTED_CONTRACTS
 
 
 def test_the_readme_example_is_a_valid_integration() -> None:
@@ -464,6 +465,7 @@ def test_the_readme_example_is_a_valid_integration() -> None:
         "name": "my-integration",
         "version": "1.0.0",
         "tools": ["word_count"],
+        "contract": 1,
         "ocr": None,
     }
 
