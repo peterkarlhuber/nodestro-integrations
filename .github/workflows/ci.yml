@@ -52,11 +52,9 @@ jobs:
         run: |
           set -o pipefail
           python -m pip install "pip>=26.1"
-          # A pull request reads the lock of the studio branch with its own name when there is one (a runtime contract
-          # change and the studio bump that moves nodestro-runtime land as a pair), else the studio master's.
-          lock=https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio
-          curl -fsSL "$lock/${GITHUB_HEAD_REF:-master}/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt" ||
-            curl -fsSL "$lock/master/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt"
+          # A pull request reads the lock of the studio branch with its own name when there is one, else the
+          # studio master's; a paired lock is shown as a warning and diffed in the job summary (scripts/studio_lock.sh).
+          bash scripts/studio_lock.sh "$RUNNER_TEMP/lock-all.txt"
           grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
           echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
           pip install -c "$RUNNER_TEMP/lock.txt" -e ".[dev]"
@@ -136,11 +134,9 @@ jobs:
         run: |
           set -o pipefail
           python -m pip install "pip>=26.1"
-          # A pull request reads the lock of the studio branch with its own name when there is one (a runtime contract
-          # change and the studio bump that moves nodestro-runtime land as a pair), else the studio master's.
-          lock=https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio
-          curl -fsSL "$lock/${GITHUB_HEAD_REF:-master}/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt" ||
-            curl -fsSL "$lock/master/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt"
+          # A pull request reads the lock of the studio branch with its own name when there is one, else the
+          # studio master's; a paired lock is shown as a warning and diffed in the job summary (scripts/studio_lock.sh).
+          bash scripts/studio_lock.sh "$RUNNER_TEMP/lock-all.txt"
           grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
           echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
           pip install -c "$RUNNER_TEMP/lock.txt" -e ".[dev]"
@@ -178,11 +174,9 @@ jobs:
       - name: Install the wheel into a fresh environment
         run: |
           set -o pipefail
-          # A pull request reads the lock of the studio branch with its own name when there is one (a runtime contract
-          # change and the studio bump that moves nodestro-runtime land as a pair), else the studio master's.
-          lock=https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio
-          curl -fsSL "$lock/${GITHUB_HEAD_REF:-master}/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt" ||
-            curl -fsSL "$lock/master/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt"
+          # A pull request reads the lock of the studio branch with its own name when there is one, else the
+          # studio master's; a paired lock is shown as a warning and diffed in the job summary (scripts/studio_lock.sh).
+          bash scripts/studio_lock.sh "$RUNNER_TEMP/lock-all.txt"
           grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
           echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
           python -m venv "$RUNNER_TEMP/wheel"
