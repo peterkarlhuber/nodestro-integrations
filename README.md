@@ -28,12 +28,17 @@ Nothing is started and no network connection is opened: an integration is code t
 
 ## Installation
 
-The package is installed from Git, pinned to a commit, like the other Nodestro components (the studio does this
+The package is installed from Git with the studio lock, like the other Nodestro components (the studio does this
 for you):
 
 ```bash
-pip install "nodestro-integrations @ git+https://github.com/peterkarlhuber/nodestro-integrations.git@<commit>"
+pip install -r https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio/master/platform/internal-server.txt
 ```
+
+The PyPI names of the Nodestro components are not registered, so a plain `pip install nodestro-integrations`
+cannot work; the studio lock (`nodestro-studio/platform/internal-server.txt`) names the exact commits tested
+together, and `pyproject.toml` only declares version ranges. To install just this package and its dependencies,
+use the lock as constraints (pip 26.1 or later): `pip install -c <lock URL> nodestro-integrations`.
 
 OCR also needs three programs on `PATH` and tesseract language data for at least one of Nodestro's languages:
 
@@ -174,7 +179,9 @@ def integration() -> Integration:
 ## Development
 
 ```bash
-pip install -e ".[dev]"
+python -m pip install "pip>=26.1"
+curl -fsSL https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio/master/platform/internal-server.txt | grep -v '^nodestro-integrations ' > lock.txt
+pip install -c lock.txt -e ".[dev]"
 ruff check . && ruff format --check . && mypy && pytest
 ```
 
