@@ -2,7 +2,7 @@
 
 Optional extensions for [Nodestro](https://github.com/peterkarlhuber/nodestro-studio), built on the extension
 contract of the [runtime](https://github.com/peterkarlhuber/nodestro-runtime) (`nodestro_runtime.extensions`,
-contract 1). The studio installs this package; the runtime and the API work without it.
+contracts 1 and 2). The studio installs this package; the runtime and the API work without it.
 
 Part of the Nodestro platform; see
 [PLATFORM.md](https://github.com/peterkarlhuber/nodestro-studio/blob/master/docs/PLATFORM.md) for the overview.
@@ -162,6 +162,12 @@ def integration() -> Integration:
   `DocumentError`. The runtime uses the first engine that is available.
 - State `contract` explicitly: the default is the runtime's current version, so an integration that relies on it is
   never refused, even by a runtime whose contract it no longer fits.
+- Contract 2 (nodestro-runtime ADR-0001, D-4) also accepts `(ToolSpec, Tool)` pairs in `tools`
+  (`nodestro_runtime.tool_spec.ToolSpec`: category, network, offline, connection type, parameters, time limit, calls
+  per run). The spec's time and call limits apply; its capability is the author's statement and is shown in the
+  catalog only: an integration tool's effective capability stays unknown (`write` + `external`) for the approval
+  rules. Tools without a spec get a time limit of 300 seconds. Contract 1 stays accepted unchanged; the
+  integrations in this package keep contract 1.
 - An integration that cannot be loaded is logged and left out; one written for another contract is refused. The
   runtime starts in either case.
 
