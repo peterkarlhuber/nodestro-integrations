@@ -194,12 +194,12 @@ jobs:
           "$RUNNER_TEMP/wheel/bin/python" - <<'EOF'
           import nodestro_integrations
           from nodestro_integrations.ocr import ocr_available
-          from nodestro_runtime.extensions import CONTRACT, Extensions, discover
+          from nodestro_runtime.extensions import SUPPORTED_CONTRACTS, Extensions, discover
 
           found = {item.name: item for item in discover()}
           item = found["tesseract-ocr"]
           assert item.version == nodestro_integrations.__version__ != "0.0.0", item.version
-          assert item.contract == CONTRACT and item.ocr is not None
+          assert item.contract == 1 and 1 in SUPPORTED_CONTRACTS and item.ocr is not None
           # Installed, but OCR is offered only when the programs and a language are there.
           assert (Extensions([item]).ocr() is not None) == ocr_available()
           print(nodestro_integrations.__file__, item)
