@@ -52,7 +52,13 @@ jobs:
         run: |
           set -o pipefail
           python -m pip install "pip>=26.1"
-          curl -fsSL https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio/master/platform/internal-server.txt | grep -v '^nodestro-integrations ' > "$RUNNER_TEMP/lock.txt"
+          # A pull request reads the lock of the studio branch with its own name when there is one (a runtime contract
+          # change and the studio bump that moves nodestro-runtime land as a pair), else the studio master's.
+          lock=https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio
+          curl -fsSL "$lock/${GITHUB_HEAD_REF:-master}/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt" ||
+            curl -fsSL "$lock/master/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt"
+          grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
+          echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
           pip install -c "$RUNNER_TEMP/lock.txt" -e ".[dev]"
       - run: ruff check .
       - run: ruff format --check .
@@ -130,7 +136,13 @@ jobs:
         run: |
           set -o pipefail
           python -m pip install "pip>=26.1"
-          curl -fsSL https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio/master/platform/internal-server.txt | grep -v '^nodestro-integrations ' > "$RUNNER_TEMP/lock.txt"
+          # A pull request reads the lock of the studio branch with its own name when there is one (a runtime contract
+          # change and the studio bump that moves nodestro-runtime land as a pair), else the studio master's.
+          lock=https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio
+          curl -fsSL "$lock/${GITHUB_HEAD_REF:-master}/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt" ||
+            curl -fsSL "$lock/master/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt"
+          grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
+          echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
           pip install -c "$RUNNER_TEMP/lock.txt" -e ".[dev]"
       # macOS runs the whole suite. The simulated programs are POSIX scripts, so Windows runs the real-OCR tests.
       - name: Tests (macOS)
@@ -166,7 +178,13 @@ jobs:
       - name: Install the wheel into a fresh environment
         run: |
           set -o pipefail
-          curl -fsSL https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio/master/platform/internal-server.txt | grep -v '^nodestro-integrations ' > "$RUNNER_TEMP/lock.txt"
+          # A pull request reads the lock of the studio branch with its own name when there is one (a runtime contract
+          # change and the studio bump that moves nodestro-runtime land as a pair), else the studio master's.
+          lock=https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio
+          curl -fsSL "$lock/${GITHUB_HEAD_REF:-master}/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt" ||
+            curl -fsSL "$lock/master/platform/internal-server.txt" > "$RUNNER_TEMP/lock-all.txt"
+          grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
+          echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
           python -m venv "$RUNNER_TEMP/wheel"
           "$RUNNER_TEMP/wheel/bin/python" -m pip install "pip>=26.1"
           "$RUNNER_TEMP/wheel/bin/pip" install -c "$RUNNER_TEMP/lock.txt" dist/*.whl
@@ -176,12 +194,12 @@ jobs:
           "$RUNNER_TEMP/wheel/bin/python" - <<'EOF'
           import nodestro_integrations
           from nodestro_integrations.ocr import ocr_available
-          from nodestro_runtime.extensions import CONTRACT, Extensions, discover
+          from nodestro_runtime.extensions import SUPPORTED_CONTRACTS, Extensions, discover
 
           found = {item.name: item for item in discover()}
           item = found["tesseract-ocr"]
           assert item.version == nodestro_integrations.__version__ != "0.0.0", item.version
-          assert item.contract == CONTRACT and item.ocr is not None
+          assert item.contract == 1 and 1 in SUPPORTED_CONTRACTS and item.ocr is not None
           # Installed, but OCR is offered only when the programs and a language are there.
           assert (Extensions([item]).ocr() is not None) == ocr_available()
           print(nodestro_integrations.__file__, item)
