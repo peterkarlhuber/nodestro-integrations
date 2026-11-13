@@ -44,9 +44,13 @@ jobs:
           python-version: "3.13"
           cache: pip
       # Collecting needs no tesseract or poppler; the real-OCR tests check for them when they run.
+      # As in ci.yml: the studio lock pins the exact commits of the version ranges.
       - name: Install the package
         run: |
-          pip install -e ".[dev]"
+          set -o pipefail
+          python -m pip install "pip>=26.1"
+          curl -fsSL https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio/master/platform/internal-server.txt | grep -v '^nodestro-integrations ' > "$RUNNER_TEMP/lock.txt"
+          pip install -c "$RUNNER_TEMP/lock.txt" -e ".[dev]"
       - name: Collect the test IDs (test-ids.txt)
         run: python -m pytest --collect-only -q -p no:cacheprovider > "$GITHUB_WORKSPACE/test-ids.txt" || true
       # A suite that collects nothing (an import error, a moved test directory) fails here instead of looking green.
