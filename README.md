@@ -197,4 +197,4 @@ Open work (release blockers, known gaps, follow-ups) is listed in [docs/TODO.md]
 ## Provenance and license
 
 The OCR comes from `backend/src/nodestro/documents.py` of `nodestro` 0.1 (15e2076); see
-[PROVENANCE.md](PROVENANCE.md). MIT, see [LICENSE](LICENSE).
+[PROVENANCE.md](PROVENANCE.md). Proprietary: Copyright (c) 2026 Levuvo. All rights reserved. See [LICENSE](LICENSE).

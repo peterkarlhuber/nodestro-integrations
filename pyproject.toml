@@ -7,7 +7,7 @@ name = "nodestro-integrations"
 version = "0.2.0"
 description = "Nodestro Integrations – optional extensions of the Nodestro runtime (local OCR of scanned PDFs)."
 readme = "README.md"
-license = "MIT"
+license = "LicenseRef-Proprietary"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 authors = [{ name = "Peter Karlhuber" }]
