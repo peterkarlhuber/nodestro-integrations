@@ -49,6 +49,8 @@ jobs:
       # The Nodestro components and orkexa are version ranges in pyproject.toml; the studio lock pins their exact
       # commits (without this package's own line). pip 26.1 or later applies it to the git requirements.
       - name: Install the package
+        env:
+          GH_TOKEN: ${{ github.token }}  # read-only; scripts/studio_lock.sh asks GitHub for lock lag
         run: |
           set -o pipefail
           python -m pip install "pip>=26.1"
@@ -131,6 +133,8 @@ jobs:
           pdfinfo -v
       # As in the test job: the studio lock pins the exact commits of the version ranges (bash on all three systems).
       - name: Install the package
+        env:
+          GH_TOKEN: ${{ github.token }}  # read-only; scripts/studio_lock.sh asks GitHub for lock lag
         run: |
           set -o pipefail
           python -m pip install "pip>=26.1"
@@ -172,6 +176,8 @@ jobs:
             exit 1
           fi
       - name: Install the wheel into a fresh environment
+        env:
+          GH_TOKEN: ${{ github.token }}  # read-only; scripts/studio_lock.sh asks GitHub for lock lag
         run: |
           set -o pipefail
           # A pull request reads the lock of the studio branch with its own name when there is one, else the
