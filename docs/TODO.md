@@ -113,6 +113,7 @@ None known.
 
 | This repo item | Other repo | Other item | Relation |
 |---|---|---|---|
+| (done 2026-11-20, W0-1) | nodestro-api, nodestro-studio | nodestro-api `scripts/studio_lock.sh` (same copy) | A master push of a merge commit reads the paired studio branch's lock while that branch is still ahead of the studio master (lock lag), else the master lock; `test_studio_lock.py` (curl stub). Keep the three copies identical |
 | (pointer) | nodestro-studio | ST-052 (Dependabot policy: weekly groups, cooldown, manual merge; auto-merge prerequisites) | Full entry in studio |
 
 ## CI access to private repositories
