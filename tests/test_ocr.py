@@ -441,9 +441,15 @@ def test_the_integration_is_registered_by_installation() -> None:
     assert item.contract == 1 and isinstance(item.ocr, ocr.TesseractOcr)
     assert isinstance(item, Integration)
     assert item.version == ocr.__version__ and item.tools == ()
-    assert Extensions([item]).summary() == [
+    assert [_without_locked(row) for row in Extensions([item]).summary()] == [
         {"name": "tesseract-ocr", "version": item.version, "tools": [], "contract": 1, "ocr": "tesseract"}
     ]
+
+
+def _without_locked(row: dict[str, object]) -> dict[str, object]:
+    """A summary row without ``locked`` (runtime W0-2): explicitly passed integrations never have a locked tool."""
+    assert row.get("locked", {}) == {}
+    return {key: value for key, value in row.items() if key != "locked"}
 
 
 def test_the_integration_states_its_contract() -> None:
@@ -461,7 +467,7 @@ def test_the_readme_example_is_a_valid_integration() -> None:
     assert callable(integration)
     item = integration()
     assert isinstance(item, Integration)
-    assert Extensions([item, ocr.integration()]).summary()[0] == {
+    assert _without_locked(Extensions([item, ocr.integration()]).summary()[0]) == {
         "name": "my-integration",
         "version": "1.0.0",
         "tools": ["word_count"],
