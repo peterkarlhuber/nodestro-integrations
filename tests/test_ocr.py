@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable
+import hashlib
 from importlib import metadata
 import json
 import os
 from pathlib import Path
 import stat
+import subprocess
 import sys
+import sysconfig
 import tempfile
 import threading
 import time
+import zipfile
 
 from nodestro_runtime.documents import DocumentError
 from nodestro_runtime.extensions import SUPPORTED_CONTRACTS, Extensions, Integration, OcrEngine, discover
@@ -492,6 +497,75 @@ def test_a_program_file_other_users_can_change_is_not_used(programs: Programs, m
     real = os.stat(programs.folder)
     monkeypatch.setattr(ocr, "_ids", lambda: (real.st_uid + 1, real.st_gid))  # the folder is another user's
     assert ocr.program_path() == [] and ocr.find_program("tesseract") is None
+
+
+def _planted_wheel(folder: Path, marker: Path) -> Path:
+    """A foreign wheel whose ``.data/scripts`` holds a ``tesseract`` (review N-22 NEW-5), as pip installs it."""
+    name = "foreign_ocr_tools-1.0"
+    files = {
+        "foreign_ocr_tools/__init__.py": b"",
+        f"{name}.data/scripts/tesseract": f"#!/bin/sh\necho planted > {marker}\nexit 1\n".encode(),
+        f"{name}.dist-info/METADATA": b"Metadata-Version: 2.1\nName: foreign-ocr-tools\nVersion: 1.0\n",
+        f"{name}.dist-info/WHEEL": b"Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+    }
+    record = [
+        f"{path},sha256={base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b'=').decode()},{len(data)}"
+        for path, data in files.items()
+    ]
+    files[f"{name}.dist-info/RECORD"] = ("\n".join([*record, f"{name}.dist-info/RECORD,,"]) + "\n").encode()
+    wheel = folder / "foreign_ocr_tools-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for path, data in files.items():
+            info = zipfile.ZipInfo(path)
+            info.external_attr = (0o755 if "/scripts/" in path else 0o644) << 16
+            archive.writestr(info, data)
+    return wheel
+
+
+def _pip_prefix(tmp_path: Path, marker: Path) -> Path:
+    """The planted wheel installed by the real pip into its own prefix; its ``tesseract`` lands in ``prefix/bin``."""
+    prefix = tmp_path / "prefix"
+    wheel = _planted_wheel(tmp_path, marker)
+    command = [sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", "--no-compile", "--prefix"]
+    subprocess.run([*command, str(prefix), str(wheel)], check=True, capture_output=True)
+    assert (prefix / "bin" / "tesseract").is_file()
+    return prefix
+
+
+@posix_only
+def test_a_program_a_wheel_installed_is_not_used(
+    programs: Programs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review N-22 NEW-5: a foreign wheel places ``tesseract`` into a folder of its installation (the images put the
+    venv's ``bin`` first on ``PATH``). A folder holding a file named in a ``RECORD`` is never a program folder."""
+    marker = tmp_path / "planted-ran.txt"
+    prefix = _pip_prefix(tmp_path, marker)
+    site = sysconfig.get_path("purelib", vars={"base": str(prefix), "platbase": str(prefix)})
+    monkeypatch.syspath_prepend(site)  # the wheel's distribution is installed in this environment
+    planted = str(prefix / "bin")
+    monkeypatch.setenv("PATH", os.pathsep.join([planted, str(programs.folder)]))
+    assert ocr.program_path() == [str(programs.folder)]
+    assert ocr.find_program("tesseract") == str(programs.folder / "tesseract")
+    assert ocr.run_ocr(b"%PDF-1.4", "scan.pdf").pages == 2 and not marker.exists()
+    monkeypatch.setenv("PATH", planted)
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
+
+
+@posix_only
+def test_a_program_in_the_interpreters_own_folder_is_not_used(
+    programs: Programs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review N-22 NEW-5: the interpreter's own program folder (the venv's ``bin``) is a package's folder too, also
+    when the distribution that put the program there is not visible to this process."""
+    marker = tmp_path / "planted-ran.txt"
+    prefix = _pip_prefix(tmp_path, marker)
+    monkeypatch.setattr(sys, "prefix", str(prefix))  # the wheel was installed into this interpreter's prefix
+    planted = str(prefix / "bin")
+    monkeypatch.setenv("PATH", os.pathsep.join([planted, str(programs.folder)]))
+    assert ocr.program_path() == [str(programs.folder)]
+    assert ocr.find_program("tesseract") == str(programs.folder / "tesseract")
+    monkeypatch.setenv("PATH", planted)
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
 
 
 # ---- the runtime's contract -----------------------------------------------------------

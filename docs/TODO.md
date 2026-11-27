@@ -91,6 +91,11 @@ None known.
 - **Third review 2026-11-27 (runtime NEW-1, NEW-2):** a file named by two distributions' `RECORD`s and a loaded or
   importable `sitecustomize`/`usercustomize` also refuse the trusted import. A Python that ships a `sitecustomize`
   (some distribution and sandbox builds) has no OCR through the runtime; the hosted runners' Pythons have none.
+- **Fourth review 2026-11-27 (NEW-4, NEW-5):** NEW-5 done: the programs never come from the interpreter's own
+  program folders or a folder holding a `RECORD`-listed file. A system `/usr` Python finds no program in `/usr/bin`
+  (README). NEW-4 (a foreign module imported before the check) is not fixed in process by design: the host
+  environment must hold only the shipped lock; the runtime's data-only extension store is the planned fix
+  (nodestro-runtime `docs/extension-isolation.md`).
 
 ## Documentation
 

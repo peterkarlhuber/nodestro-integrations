@@ -54,6 +54,13 @@ are installed. `osd` (installed with tesseract on Debian, Ubuntu and Homebrew) l
 scanned sideways or upside down. `TESSDATA_PREFIX` points tesseract to another language data folder; that folder also needs tesseract's `configs/tsv`
 (copy the `configs` folder of the installation), or no text is read.
 
+The programs are looked up only in absolute `PATH` folders that only root and the current user can change, and
+never in a folder a Python package can put programs into: the interpreter's own `bin` or `Scripts` folder (a venv's
+`bin`) and any folder that holds a file named in an installed distribution's `RECORD` (N-22 NEW-5). Install the
+programs as system programs (apt, Homebrew, the Windows installers). A Python installed into the same `bin` folder
+as the programs (a system `/usr` Python, or Homebrew's `bin` after a `pip install` of a package with commands there)
+finds no program: run Nodestro from a venv.
+
 ## The OCR
 
 - Each page is rendered with `pdftoppm` at 200 dpi and recognized with `tesseract`; the text of each page follows a

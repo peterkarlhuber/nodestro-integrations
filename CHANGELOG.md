@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Security (N-22 fourth review NEW-5): the OCR programs are never taken from a folder a Python package can place
+  programs into: the interpreter's own program folders (`bin`/`Scripts` of `sys.prefix` and `sys.exec_prefix`, the
+  `scripts` path of every install scheme) and every folder holding a file named in an installed distribution's
+  `RECORD` (compared by device and inode). A foreign wheel's `.data/scripts/tesseract` in the venv's `bin`, which the
+  images put first on `PATH`, is no longer found or run. New: `ocr.python_folders`. Tests with a wheel installed by
+  the real pip (`test_a_program_a_wheel_installed_is_not_used`, `test_a_program_in_the_interpreters_own_folder_is_not_used`).
+
 - Security (N-22 independent review M2): the OCR programs are found only in absolute `PATH` folders that only root
   and the current user can change (the program file and every parent too); empty, relative and other folders are
   skipped, and the programs' `PATH` holds only those folders. `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and

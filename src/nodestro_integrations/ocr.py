@@ -21,6 +21,8 @@ The engine is registered as the integration ``tesseract-ocr`` (entry point group
 
 from __future__ import annotations
 
+import csv
+from importlib import metadata
 import math
 import os
 from pathlib import Path
@@ -29,6 +31,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import threading
 import time
@@ -143,15 +146,53 @@ def _closed(path: Path) -> bool:
     return not any(_unsafe(folder, own=index == 0) for index, folder in enumerate([real, *real.parents]))
 
 
+def _identity(path: str | os.PathLike[str]) -> tuple[int, int] | None:
+    try:
+        info = os.stat(path)
+    except OSError:
+        return None
+    return info.st_dev, info.st_ino
+
+
+def python_folders() -> set[tuple[int, int]]:
+    """The folders Python packages can place programs in (review N-22 NEW-5), by device and inode: the interpreter's
+    own program folders (``bin`` or ``Scripts`` of its prefixes, of every install scheme) and every folder that holds
+    a file named in a distribution's ``RECORD``. A wheel's ``.data/scripts`` lands there, so a ``tesseract`` from a
+    package is never taken for the system's."""
+    folders: set[str] = set()
+    for prefix in {sys.prefix, sys.exec_prefix}:
+        folders |= {os.path.join(prefix, "bin"), os.path.join(prefix, "Scripts")}
+    for scheme in sysconfig.get_scheme_names():
+        try:
+            folders.add(sysconfig.get_path("scripts", scheme))
+        except (KeyError, ValueError):
+            continue
+    for distribution in metadata.distributions():
+        base = str(distribution.locate_file(""))
+        record = distribution.read_text("RECORD")
+        if record is not None:  # read directly: its folders, not its files, are needed (a tenth of the time)
+            named = {os.path.dirname(row[0]) for row in csv.reader(record.splitlines()) if row}
+        else:
+            named = {os.path.dirname(str(file)) for file in distribution.files or ()}
+        folders |= {os.path.normpath(os.path.join(base, folder)) for folder in named}
+    return {found for found in map(_identity, folders) if found is not None}
+
+
 def program_path() -> list[str]:
     """The ``PATH`` folders the programs may come from (review M2): absolute, existing, and closed like the runtime's
     import path. An empty or relative element (the working directory) and a folder another user could change are left
-    out, so a program placed there is never found or run."""
+    out, so a program placed there is never found or run. So is every folder of :func:`python_folders` (NEW-5): the
+    OCR programs are system programs, never ones a Python package installed."""
     folders: list[str] = []
+    excluded: set[tuple[int, int]] | None = None
     for element in os.environ.get("PATH", "").split(os.pathsep):
         if not element or not os.path.isabs(element) or not os.path.isdir(element):
             continue
-        if element not in folders and _closed(Path(element)):
+        if element in folders or not _closed(Path(element)):
+            continue
+        if excluded is None:
+            excluded = python_folders()
+        if _identity(element) not in excluded:
             folders.append(element)
     return folders
 
