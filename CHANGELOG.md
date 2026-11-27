@@ -6,6 +6,8 @@
   and the folder holding it must be root's alone) and the program runs by its real path, so a link through a folder
   another user controls is refused and cannot be repointed before the start. `TESSDATA_PREFIX` is no longer passed to
   the programs; tesseract reads the language data of its installation. New: `ocr.resolved`.
+  CI: the macOS real-OCR job also gives every link on the way to a program (Homebrew's `bin` links into its
+  Cellar) and the folder holding it to root, and prints what `find_program` resolves (about a second, no new job).
 
 - Security (owner decision 2026-11-27): the OCR programs come only from folders whose whole chain (folder, every
   parent, program file) belongs to root and no group or other user can write; a folder of the user (Homebrew's or a

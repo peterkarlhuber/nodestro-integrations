@@ -175,14 +175,35 @@ jobs:
           # The OCR programs come only from folders root owns along the whole chain (owner decision 2026-11-27):
           # give Homebrew's program folders and files to root, as a system installation would have them.
           to_root() { local folder=$1; while [ "$folder" != / ]; do sudo chown root "$folder"; sudo chmod go-w "$folder"; folder=$(dirname "$folder"); done; }
+          # Every symbolic link on the way counts too (review F1): Homebrew's bin/tesseract links into its Cellar, so
+          # each link and the folder holding it go to root as well (the links are listed hop by hop, as the check
+          # resolves them).
+          hops='import os, sys
+          from pathlib import Path
+          parts = list(Path(sys.argv[1]).parts); current = Path(parts.pop(0))
+          while parts:
+              part = parts.pop(0)
+              if part == "..": current = current.parent; continue
+              candidate = current / part
+              if not candidate.is_symlink(): current = candidate; continue
+              print(candidate); print(current)
+              target = Path(os.readlink(candidate))
+              if target.is_absolute(): current, parts = Path(target.anchor), [*target.parts[1:], *parts]
+              else: parts = [*target.parts, *parts]'
           for program in tesseract pdftoppm pdfinfo; do
             found=$(command -v "$program")
             to_root "$(dirname "$found")"
+            python -I -c "$hops" "$found" | while read -r link && read -r holder; do
+              sudo chown -h root "$link"
+              to_root "$holder"
+            done
             real=$(python -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$found")
             sudo chown root "$real"
             sudo chmod go-w "$real"
             to_root "$(dirname "$real")"
+            ls -l "$found" "$real"
           done
+          python -I -c 'from nodestro_integrations import ocr; print({n: ocr.find_program(n) for n in ("tesseract", "pdftoppm", "pdfinfo")})'
       - name: Tests (macOS)
         if: runner.os == 'macOS'
         run: pytest
