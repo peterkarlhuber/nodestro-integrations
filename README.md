@@ -181,7 +181,7 @@ def integration() -> Integration:
 ```bash
 python -m pip install "pip>=26.1"
 curl -fsSL https://raw.githubusercontent.com/peterkarlhuber/nodestro-studio/master/platform/internal-server.txt | grep -v '^nodestro-integrations ' > lock.txt
-pip install -c lock.txt -e ".[dev]"
+pip install -c lock.txt ".[dev]"  # not editable: the runtime imports only a wheel install (N-22); reinstall after a change
 ruff check . && ruff format --check . && mypy && pytest
 ```
 

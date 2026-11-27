@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- CI (N-22): the tests install this package as a wheel, not editable. nodestro-runtime (N-22, review F1) imports
+  the entry point only from a wheel install whose files match the hashes in its `RECORD`; an editable install lists no
+  package files there and is not trusted. The README's development install says the same.
 - Added (QA-17 (AC-2): dependency policy check, 2026-11-14): `dependency-policy.json` is this repository's copy of the
   dependency policy K-33 from nodestro-studio (only its outgoing edges: `nodestro-runtime` in the core), and
   `scripts/check_dependency_policy.py` is the unchanged checker from there; `scripts/DEPENDENCY_POLICY_SOURCE.md`

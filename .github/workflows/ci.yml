@@ -59,7 +59,7 @@ jobs:
           bash scripts/studio_lock.sh "$RUNNER_TEMP/lock-all.txt"
           grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
           echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
-          pip install -c "$RUNNER_TEMP/lock.txt" -e ".[dev]"
+          pip install -c "$RUNNER_TEMP/lock.txt" ".[dev]"  # not editable: the runtime trusts only a wheel install (N-22)
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy
@@ -143,7 +143,7 @@ jobs:
           bash scripts/studio_lock.sh "$RUNNER_TEMP/lock-all.txt"
           grep -v '^nodestro-integrations ' "$RUNNER_TEMP/lock-all.txt" > "$RUNNER_TEMP/lock.txt"
           echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
-          pip install -c "$RUNNER_TEMP/lock.txt" -e ".[dev]"
+          pip install -c "$RUNNER_TEMP/lock.txt" ".[dev]"  # not editable: the runtime trusts only a wheel install (N-22)
       # macOS runs the whole suite. The simulated programs are POSIX scripts, so Windows runs the real-OCR tests.
       - name: Tests (macOS)
         if: runner.os == 'macOS'
