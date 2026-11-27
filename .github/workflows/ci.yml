@@ -63,6 +63,16 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - run: mypy
+      # N-22 (owner decision on R1): the runtime imports this integration only on a closed import path; the hosted
+      # runner's interpreter directories are writable by every user, which it rightly refuses. Close them as the
+      # products' installations are (about a second).
+      - name: Close the interpreter directories
+        shell: bash
+        run: |
+          prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
+          chmod -R go-w "$prefix"
+          parent=$(dirname "$prefix")
+          while [ "$parent" != / ]; do if [ -O "$parent" ]; then chmod go-w "$parent"; fi; parent=$(dirname "$parent"); done
       - run: pytest
       # Known vulnerabilities in the installed dependencies (as orkexa's CI checks them). Blocking: an advisory that
       # was reviewed and cannot be fixed yet goes into PIP_AUDIT_IGNORE (space-separated IDs, with the reason here).
@@ -145,6 +155,17 @@ jobs:
           echo "lock: $(grep '^nodestro-runtime ' "$RUNNER_TEMP/lock.txt")"
           pip install -c "$RUNNER_TEMP/lock.txt" ".[dev]"  # not editable: the runtime trusts only a wheel install (N-22)
       # macOS runs the whole suite. The simulated programs are POSIX scripts, so Windows runs the real-OCR tests.
+      # N-22 (owner decision on R1): the runtime imports this integration only on a closed import path; the hosted
+      # runner's interpreter directories are writable by every user, which it rightly refuses. Close them as the
+      # products' installations are (about a second).
+      - name: Close the interpreter directories
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
+          chmod -R go-w "$prefix"
+          parent=$(dirname "$prefix")
+          while [ "$parent" != / ]; do if [ -O "$parent" ]; then chmod go-w "$parent"; fi; parent=$(dirname "$parent"); done
       - name: Tests (macOS)
         if: runner.os == 'macOS'
         run: pytest
@@ -188,6 +209,16 @@ jobs:
           python -m venv "$RUNNER_TEMP/wheel"
           "$RUNNER_TEMP/wheel/bin/python" -m pip install "pip>=26.1"
           "$RUNNER_TEMP/wheel/bin/pip" install -c "$RUNNER_TEMP/lock.txt" dist/*.whl
+      # N-22 (owner decision on R1): the runtime imports this integration only on a closed import path; the hosted
+      # runner's interpreter directories are writable by every user, which it rightly refuses. Close them as the
+      # products' installations are (about a second).
+      - name: Close the interpreter directories
+        shell: bash
+        run: |
+          prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
+          chmod -R go-w "$prefix"
+          parent=$(dirname "$prefix")
+          while [ "$parent" != / ]; do if [ -O "$parent" ]; then chmod go-w "$parent"; fi; parent=$(dirname "$parent"); done
       - name: The runtime discovers the installed integration
         working-directory: ${{ runner.temp }}
         run: |

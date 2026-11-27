@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- CI (N-22 R1): the jobs that let the runtime discover this integration close the hosted runner's interpreter
+  directories first (`chmod go-w`; writable by every user there), since the runtime now imports it only on a closed
+  import path. About a second per job, no new job. On Windows the runtime refuses the import (ACLs are not checked).
+
 - Tests: a flaky leak check fixed at its cause. `test_documents_wait_for_a_free_slot` found a `nodestro-resolve-*`
   directory in its temporary root (master f29a377, Python 3.11). It came from the previous test's `Workspace`: its
   process-wide Docker check ran on in the background with a Docker daemon present (CI runners) and its self-test
