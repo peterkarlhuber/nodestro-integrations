@@ -88,6 +88,9 @@ None known.
   (`_virtualenv.pth`), coverage or pytest-cov refuses the trusted import and OCR is unavailable there. This
   repository's CI installs the package as a wheel into the runner's interpreter or a `python -m venv`, without such
   files; the studio's components jobs run this suite with the studio installed as a wheel.
+- **Third review 2026-11-27 (runtime NEW-1, NEW-2):** a file named by two distributions' `RECORD`s and a loaded or
+  importable `sitecustomize`/`usercustomize` also refuse the trusted import. A Python that ships a `sitecustomize`
+  (some distribution and sandbox builds) has no OCR through the runtime; the hosted runners' Pythons have none.
 
 ## Documentation
 
