@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 0 |
 | P2 Medium | 0 |
-| P3 Low | 0 |
+| P3 Low | 1 |
 | P4 Optional | 3 |
 
 **Release blockers:** None. No entry blocks the frozen desktop candidate v0.2.0-preview.1 or the next preview;
@@ -63,6 +63,18 @@ None known.
 None known.
 
 ## Platform coverage
+
+### INT-007 · OCR discovery is refused on Windows and on unclosed interpreter directories (runtime R1)
+
+- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** nodestro-runtime PR #226 (`docs/extension-isolation.md`,
+  "Trust boundary of the host import (R1)"), this repository's CI step "Close the interpreter directories"
+- **What:** The runtime now imports this package as a trusted host integration only when it is installed next to
+  `nodestro_runtime` and the import path is closed (no user site, no entry writable by another user). Windows has no
+  such check yet, so the trusted import is locked there and OCR is unavailable; the Windows real-OCR test fails by
+  design until this is decided. A machine or CI runner with a writable interpreter prefix or an existing
+  `~/.local` user site on the path is refused the same way; CI closes the runner's interpreter directories first.
+- **Decision needed:** (a) implement an ACL check on Windows in the runtime, or (b) accept the lock and change the
+  Windows expectation of the real-OCR test. Not a release blocker: no Windows desktop is built.
 
 ## Documentation
 
@@ -115,6 +127,7 @@ None known.
 |---|---|---|---|
 | (done 2026-11-20, W0-1) | nodestro-api, nodestro-studio | nodestro-api `scripts/studio_lock.sh` (same copy) | A master push of a merge commit reads the paired studio branch's lock while that branch is still ahead of the studio master (lock lag), else the master lock; `test_studio_lock.py` (curl stub). Keep the copies identical |
 | (in review 2026-11-20, Welle 1) | nodestro-api, nodestro-sdk, nodestro-runtime | `scripts/studio_lock.sh` (same copy), `GH_TOKEN` on each lock step | The lock-lag compare request uses the read-only workflow token; an API error reads the master lock with a "Lock lag unknown" warning naming the HTTP status (404: branch gone, no warning). `tests/test_studio_lock.py`. Keep the copies identical |
+| INT-007 (2026-11-27, N-22) | nodestro-runtime, nodestro-studio | runtime R1 trust boundary (PR #226), studio CI step "Close the interpreter directories" | OCR discovery depends on the runtime's location pin and closed import path; keep the CI steps in both repositories alike |
 | (pointer) | nodestro-studio | ST-052 (Dependabot policy: weekly groups, cooldown, manual merge; auto-merge prerequisites) | Full entry in studio |
 
 ## CI access to private repositories
