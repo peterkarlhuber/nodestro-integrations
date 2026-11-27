@@ -70,9 +70,9 @@ jobs:
         shell: bash
         run: |
           prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
-          chmod -R go-w "$prefix"
+          sudo chmod -R go-w "$prefix"
           parent=$(dirname "$prefix")
-          while [ "$parent" != / ]; do if [ -O "$parent" ]; then chmod go-w "$parent"; fi; parent=$(dirname "$parent"); done
+          while [ "$parent" != / ]; do sudo chmod go-w "$parent"; parent=$(dirname "$parent"); done
       - run: pytest
       # Known vulnerabilities in the installed dependencies (as orkexa's CI checks them). Blocking: an advisory that
       # was reviewed and cannot be fixed yet goes into PIP_AUDIT_IGNORE (space-separated IDs, with the reason here).
@@ -163,9 +163,9 @@ jobs:
         shell: bash
         run: |
           prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
-          chmod -R go-w "$prefix"
+          sudo chmod -R go-w "$prefix"
           parent=$(dirname "$prefix")
-          while [ "$parent" != / ]; do if [ -O "$parent" ]; then chmod go-w "$parent"; fi; parent=$(dirname "$parent"); done
+          while [ "$parent" != / ]; do sudo chmod go-w "$parent"; parent=$(dirname "$parent"); done
       - name: Tests (macOS)
         if: runner.os == 'macOS'
         run: pytest
@@ -216,9 +216,9 @@ jobs:
         shell: bash
         run: |
           prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
-          chmod -R go-w "$prefix"
+          sudo chmod -R go-w "$prefix"
           parent=$(dirname "$prefix")
-          while [ "$parent" != / ]; do if [ -O "$parent" ]; then chmod go-w "$parent"; fi; parent=$(dirname "$parent"); done
+          while [ "$parent" != / ]; do sudo chmod go-w "$parent"; parent=$(dirname "$parent"); done
       - name: The runtime discovers the installed integration
         working-directory: ${{ runner.temp }}
         run: |
