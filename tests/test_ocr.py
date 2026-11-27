@@ -9,6 +9,7 @@ from importlib import metadata
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
 import subprocess
 import sys
@@ -215,6 +216,13 @@ def programs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Programs:
     folder = tmp_path / "bin"
     folder.mkdir()
     monkeypatch.setenv("PATH", str(folder))
+    # The simulated programs belong to the test user in a temporary folder. The product accepts only folders whose
+    # whole chain root owns (tested without this fixture below); here the rule applies within ``tmp_path``, with the
+    # test user counted as an administrator.
+    monkeypatch.setattr(
+        ocr, "_chain", lambda real: [real, *(item for item in real.parents if item.is_relative_to(tmp_path))]
+    )
+    monkeypatch.setattr(ocr, "program_owners", lambda: frozenset({0, os.geteuid()}))
     return Programs(folder)
 
 
@@ -494,9 +502,60 @@ def test_a_program_file_other_users_can_change_is_not_used(programs: Programs, m
     (programs.folder / "tesseract").chmod(0o755)
     if os.stat(programs.folder).st_uid == 0:  # a folder of root is administered and accepted: give it to a user
         os.chown(programs.folder, 4242, 4242)
-    real = os.stat(programs.folder)
-    monkeypatch.setattr(ocr, "_ids", lambda: (real.st_uid + 1, real.st_gid))  # the folder is another user's
+    monkeypatch.setattr(ocr, "program_owners", lambda: frozenset({0}))  # the product's rule: root only
     assert ocr.program_path() == [] and ocr.find_program("tesseract") is None
+
+
+@posix_only
+def test_programs_come_only_from_folders_root_owns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Owner decision 2026-11-27: a program folder's whole chain must belong to root, writable by no group or other
+    user. A folder of the user (a Homebrew or conda ``bin``) is refused; a system folder such as the one of ``sh``
+    is accepted. Without the simulation fixture: the product's rule."""
+    marker = tmp_path / "planted-ran.txt"
+    planted = tmp_path / "user-bin"
+    planted.mkdir()
+    program = planted / "tesseract"
+    program.write_text(f"#!/bin/sh\necho planted > {marker}\nexit 1\n", encoding="utf-8")
+    program.chmod(0o755)
+    if os.geteuid() == 0:  # run as root: the folder is root's, but its group (root's) may write it, which is refused
+        os.chown(planted, 0, 0)
+        planted.chmod(0o775)
+    system = os.path.dirname(os.path.realpath(shutil.which("sh") or "/bin/sh"))
+    monkeypatch.setenv("PATH", os.pathsep.join([str(planted), system]))
+    assert ocr.program_path() == [system]
+    assert ocr.find_program("tesseract") in (None, os.path.join(system, "tesseract"))
+    monkeypatch.setenv("PATH", str(planted))
+    assert ocr.program_path() == [] and ocr.find_program("tesseract") is None
+    assert not ocr.ocr_available() and not marker.exists()
+
+
+@posix_only
+@pytest.mark.parametrize(
+    ("owner", "mode", "accepted"),
+    [
+        (0, 0o755, True),
+        (0, 0o775, False),  # root's folder writable by a group, also root's group
+        (0, 0o1777, False),  # sticky and writable by every user, like /tmp
+        (0, 0o757, False),
+        (4242, 0o755, False),  # another user's
+        (None, 0o755, False),  # the current user's (Homebrew, conda), when it is not root
+    ],
+)
+def test_every_folder_of_the_chain_must_be_roots_alone(
+    monkeypatch: pytest.MonkeyPatch, owner: int | None, mode: int, accepted: bool
+) -> None:
+    """The rule on each folder of the chain (``/opt/tools/bin`` and its parents), the middle one varied."""
+    uid = owner if owner is not None else (os.geteuid() or 501)
+
+    def status(path: Path) -> os.stat_result:
+        varied = str(path) == "/opt/tools"
+        return os.stat_result(
+            (stat.S_IFDIR | (mode if varied else 0o755), 0, 0, 0, uid if varied else 0, 0, 0, 0, 0, 0)
+        )
+
+    monkeypatch.setattr(ocr, "_status", status)
+    monkeypatch.setattr(ocr.os.path, "realpath", lambda path: str(path))
+    assert ocr._closed(Path("/opt/tools/bin")) is accepted
 
 
 def _planted_wheel(folder: Path, marker: Path) -> Path:

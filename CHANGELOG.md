@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Security (owner decision 2026-11-27): the OCR programs come only from folders whose whole chain (folder, every
+  parent, program file) belongs to root and no group or other user can write; a folder of the user (Homebrew's or a
+  conda environment's `bin`, another environment's `bin` on `PATH`) is refused (README: remedy). New:
+  `ocr.program_owners`. CI: the macOS real-OCR job gives the programs' folders and files to root (about a second, no
+  new job). README "Writing an integration": extension packages are never installed into Nodestro's environment.
+
 - Security (N-22 fourth review NEW-5): the OCR programs are never taken from a folder a Python package can place
   programs into: the interpreter's own program folders (`bin`/`Scripts` of `sys.prefix` and `sys.exec_prefix`, the
   `scripts` path of every install scheme) and every folder holding a file named in an installed distribution's

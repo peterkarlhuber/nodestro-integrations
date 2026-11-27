@@ -117,33 +117,41 @@ def program_environment() -> dict[str, str]:
     return environment
 
 
-def _ids() -> tuple[int, int]:
-    return os.geteuid(), os.getegid()
+def program_owners() -> frozenset[int]:
+    """The users a program folder, the program file and every parent may belong to: root only (owner decision
+    2026-11-27). A folder of the current user (Homebrew's or conda's ``bin``) is refused: whatever runs as this user
+    could replace a program there."""
+    return frozenset({0})
 
 
-def _unsafe(path: Path, *, own: bool) -> bool:
-    """Whether another user than root and this one could change ``path`` (the rule of the runtime's import path
-    check, ``nodestro_runtime.trusted_integrations``): another owner, writable by every user (a parent with the sticky
-    bit, like ``/tmp``, excepted), or writable by a group other than root's and this process's own."""
-    euid, egid = _ids()
+def _status(path: Path) -> os.stat_result:
+    return os.stat(path)
+
+
+def _chain(real: Path) -> list[Path]:
+    """The folders checked for ``real``: itself and every parent up to the root of the file system."""
+    return [real, *real.parents]
+
+
+def _unsafe(path: Path) -> bool:
+    """Whether ``path`` is not administered by root alone: another owner than :func:`program_owners`, or writable by
+    a group or by every user (no exception for sticky folders such as ``/tmp`` or for root's group)."""
     try:
-        info = os.stat(path)
+        info = _status(path)
     except OSError:
         return True
-    if info.st_uid not in (0, euid):
+    if info.st_uid not in program_owners():
         return True
-    if info.st_mode & stat.S_IWOTH and (own or not info.st_mode & stat.S_ISVTX):
-        return True
-    return bool(info.st_mode & stat.S_IWGRP and info.st_gid not in (0, egid))
+    return bool(info.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
 
 
 def _closed(path: Path) -> bool:
-    """Whether ``path`` (an existing file or folder, resolved) and every parent can be changed only by root and this
-    user. Windows: ACLs are not read, only absolute folders count there (the runtime locks its trusted import)."""
+    """Whether ``path`` (an existing file or folder, its symbolic links resolved) and every parent belong to root and
+    no group or other user can write them. Windows: ACLs are not read, only absolute folders count there (the runtime
+    locks its trusted import)."""
     if os.name != "posix":
         return True
-    real = Path(os.path.realpath(path))
-    return not any(_unsafe(folder, own=index == 0) for index, folder in enumerate([real, *real.parents]))
+    return not any(_unsafe(folder) for folder in _chain(Path(os.path.realpath(path))))
 
 
 def _identity(path: str | os.PathLike[str]) -> tuple[int, int] | None:
@@ -179,9 +187,10 @@ def python_folders() -> set[tuple[int, int]]:
 
 
 def program_path() -> list[str]:
-    """The ``PATH`` folders the programs may come from (review M2): absolute, existing, and closed like the runtime's
-    import path. An empty or relative element (the working directory) and a folder another user could change are left
-    out, so a program placed there is never found or run. So is every folder of :func:`python_folders` (NEW-5): the
+    """The ``PATH`` folders the programs may come from (review M2, owner decision 2026-11-27): absolute, existing, and
+    with the whole chain owned by root and writable by no group or other user (:func:`_closed`). An empty or relative
+    element (the working directory) and a folder the user or another user could change are left out, so a program
+    placed there is never found or run. So is every folder of :func:`python_folders` (NEW-5): the
     OCR programs are system programs, never ones a Python package installed."""
     folders: list[str] = []
     excluded: set[tuple[int, int]] | None = None

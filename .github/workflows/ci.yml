@@ -161,7 +161,8 @@ jobs:
       # macOS: the framework belongs to root and the admin group, and Homebrew's folders to the runner and the admin
       # group. A folder another group can write is refused (review M1), also for the OCR programs (review M2), so the
       # framework is given to the runner (as a Homebrew or user install is; root-owned, the installation would look
-      # sealed while the checkout is writable) and the group's write access is removed along the programs' paths.
+      # sealed while the checkout is writable). The OCR programs must come from folders root owns along the whole
+      # chain (owner decision 2026-11-27), so the programs' folders and files are given to root. About a second.
       - name: Close the interpreter and program directories
         if: runner.os != 'Windows'
         shell: bash
@@ -171,12 +172,16 @@ jobs:
           sudo chown -R "$(id -u)" "$prefix"
           sudo chmod -R go-w "$prefix"
           close_up "$(dirname "$prefix")"
+          # The OCR programs come only from folders root owns along the whole chain (owner decision 2026-11-27):
+          # give Homebrew's program folders and files to root, as a system installation would have them.
+          to_root() { local folder=$1; while [ "$folder" != / ]; do sudo chown root "$folder"; sudo chmod go-w "$folder"; folder=$(dirname "$folder"); done; }
           for program in tesseract pdftoppm pdfinfo; do
             found=$(command -v "$program")
-            close_up "$(dirname "$found")"
+            to_root "$(dirname "$found")"
             real=$(python -I -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$found")
+            sudo chown root "$real"
             sudo chmod go-w "$real"
-            close_up "$(dirname "$real")"
+            to_root "$(dirname "$real")"
           done
       - name: Tests (macOS)
         if: runner.os == 'macOS'

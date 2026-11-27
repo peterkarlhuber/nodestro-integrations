@@ -54,12 +54,18 @@ are installed. `osd` (installed with tesseract on Debian, Ubuntu and Homebrew) l
 scanned sideways or upside down. `TESSDATA_PREFIX` points tesseract to another language data folder; that folder also needs tesseract's `configs/tsv`
 (copy the `configs` folder of the installation), or no text is read.
 
-The programs are looked up only in absolute `PATH` folders that only root and the current user can change, and
-never in a folder a Python package can put programs into: the interpreter's own `bin` or `Scripts` folder (a venv's
+The programs are looked up only in absolute `PATH` folders whose whole chain (the folder, every parent and the
+program file, symbolic links resolved) belongs to root and is writable by no group and no other user (owner decision
+2026-11-27), and never in a folder a Python package can put programs into: the interpreter's own `bin` or `Scripts` folder (a venv's
 `bin`) and any folder that holds a file named in an installed distribution's `RECORD` (N-22 NEW-5). Install the
 programs as system programs (apt, Homebrew, the Windows installers). A Python installed into the same `bin` folder
 as the programs (a system `/usr` Python, or Homebrew's `bin` after a `pip install` of a package with commands there)
-finds no program: run Nodestro from a venv.
+finds no program: run Nodestro from a venv. A folder the user owns is refused too, so OCR finds no program in
+Homebrew's `/opt/homebrew/bin` or `/usr/local/bin` (owned by the user who installed Homebrew) or in a conda
+environment's `bin`, and none in a folder another environment put on `PATH`. Remedy: install the programs with the
+system's package manager (apt, dnf) into `/usr/bin`, or, on macOS, give the programs' folders and files to root
+(`sudo chown root` and `sudo chmod go-w` along the chain, as this repository's macOS CI job does; Homebrew then needs
+`sudo` to update them).
 
 ## The OCR
 
@@ -139,6 +145,15 @@ programs. A valid PDF without recognizable text gives an empty text, not an erro
 
 ## Writing an integration
 
+**Never install an extension package into Nodestro's Python environment** (owner decision 2026-11-27). That
+environment holds only the shipped lock; the products have no pip. The runtime refuses every foreign package it finds
+there as "installed in the host environment": it is never imported, never offered and never sent to the sandbox, and
+its tools stay locked whatever `NODESTRO_EXTENSION_TOOLS` says. Foreign extensions will run only from the separate
+extension store (`<data>/extensions`, nodestro-runtime `docs/extension-isolation.md`), and only in the Docker
+sandbox; until that store is built and reviewed there is no supported way to add one. Only this repository's own
+integration, installed with the runtime as part of the lock, is imported into the host.
+
+The format below is the contract an extension package is written against (the store will read the same entry point).
 An integration is a distribution with an entry point in the group `nodestro.integrations` that names an
 `Integration` or a function returning one:
 
@@ -176,8 +191,9 @@ def integration() -> Integration:
     )
 ```
 
-- `tools` are trusted orkexa tools that run in the runtime's process and appear in the tool library like the
-  built-in tools; tool names must be unique.
+- `tools` are orkexa tools; tool names must be unique. Passed explicitly (`Workspace(integrations=[...])`, the
+  embedding application's own code) they run in the runtime's process like the built-in tools; tools of an installed
+  integration stay locked (see above).
 - `ocr` is an `OcrEngine`: a `name`, `available()` and `recognize(data, name)` returning an `OcrResult` or raising
   `DocumentError`. The runtime uses the first engine that is available.
 - State `contract` explicitly: the default is the runtime's current version, so an integration that relies on it is

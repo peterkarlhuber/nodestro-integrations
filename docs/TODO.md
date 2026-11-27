@@ -96,6 +96,14 @@ None known.
   (README). NEW-4 (a foreign module imported before the check) is not fixed in process by design: the host
   environment must hold only the shipped lock; the runtime's data-only extension store is the planned fix
   (nodestro-runtime `docs/extension-isolation.md`).
+- **Owner decision 2026-11-27 (binding):** foreign extension packages are never installed into the host environment
+  and never loaded or run in the host process; only this integration, from the lock and verified by the runtime, is.
+  Done here: the OCR programs come only from root-owned chains without group or other write (this closes the fourth
+  review's Low on another environment's `bin` on `PATH`; Homebrew and conda user `bin` folders are refused, README
+  remedy), and the README no longer tells anyone to install extensions into the host. The other Low (a false
+  refusal when an install scheme's scripts folder is the system's program folder) stays documented.
+  Cross-reference: the data-only extension store (nodestro-runtime RT-084) is a G-6 prerequisite; this package's
+  entry point format is what the store will read.
 
 ## Documentation
 
