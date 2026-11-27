@@ -83,6 +83,11 @@ None known.
   it does not prove R1. R1 is covered by the runtime's `tests/test_trusted_integrations.py` (forged copies, foreign
   `RECORD`s, real pip, open import paths) and, end to end, by the Windows refusal assertion of the real-OCR test.
   On macOS, Homebrew folders writable by the `admin` group make OCR find no program until `chmod g-w` (README).
+- **Re-review 2026-11-27 (runtime N1 to N5):** the runtime accepts only allowlisted `.pth` files (setuptools'
+  `distutils-precedence.pth`), so an environment with an editable install, a uv or virtualenv venv
+  (`_virtualenv.pth`), coverage or pytest-cov refuses the trusted import and OCR is unavailable there. This
+  repository's CI installs the package as a wheel into the runner's interpreter or a `python -m venv`, without such
+  files; the studio's components jobs run this suite with the studio installed as a wheel.
 
 ## Documentation
 
