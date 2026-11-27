@@ -70,9 +70,12 @@ jobs:
         shell: bash
         run: |
           prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
-          sudo chmod -R go-w "$prefix"
+          # macOS: the framework belongs to root and the admin group (the runner's); keep that group's write access,
+          # or the installation looks sealed while the checkout is writable (also refused).
+          mode=go-w; if [ "$RUNNER_OS" = macOS ]; then mode=o-w; fi
+          sudo chmod -R "$mode" "$prefix"
           parent=$(dirname "$prefix")
-          while [ "$parent" != / ]; do sudo chmod go-w "$parent"; parent=$(dirname "$parent"); done
+          while [ "$parent" != / ]; do sudo chmod "$mode" "$parent"; parent=$(dirname "$parent"); done
       - run: pytest
       # Known vulnerabilities in the installed dependencies (as orkexa's CI checks them). Blocking: an advisory that
       # was reviewed and cannot be fixed yet goes into PIP_AUDIT_IGNORE (space-separated IDs, with the reason here).
@@ -163,9 +166,12 @@ jobs:
         shell: bash
         run: |
           prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
-          sudo chmod -R go-w "$prefix"
+          # macOS: the framework belongs to root and the admin group (the runner's); keep that group's write access,
+          # or the installation looks sealed while the checkout is writable (also refused).
+          mode=go-w; if [ "$RUNNER_OS" = macOS ]; then mode=o-w; fi
+          sudo chmod -R "$mode" "$prefix"
           parent=$(dirname "$prefix")
-          while [ "$parent" != / ]; do sudo chmod go-w "$parent"; parent=$(dirname "$parent"); done
+          while [ "$parent" != / ]; do sudo chmod "$mode" "$parent"; parent=$(dirname "$parent"); done
       - name: Tests (macOS)
         if: runner.os == 'macOS'
         run: pytest
@@ -216,9 +222,12 @@ jobs:
         shell: bash
         run: |
           prefix=$(python -I -c 'import sys; print(sys.base_prefix)')
-          sudo chmod -R go-w "$prefix"
+          # macOS: the framework belongs to root and the admin group (the runner's); keep that group's write access,
+          # or the installation looks sealed while the checkout is writable (also refused).
+          mode=go-w; if [ "$RUNNER_OS" = macOS ]; then mode=o-w; fi
+          sudo chmod -R "$mode" "$prefix"
           parent=$(dirname "$prefix")
-          while [ "$parent" != / ]; do sudo chmod go-w "$parent"; parent=$(dirname "$parent"); done
+          while [ "$parent" != / ]; do sudo chmod "$mode" "$parent"; parent=$(dirname "$parent"); done
       - name: The runtime discovers the installed integration
         working-directory: ${{ runner.temp }}
         run: |
