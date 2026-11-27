@@ -46,13 +46,28 @@ OCR also needs three programs on `PATH` and tesseract language data for at least
 | --- | --- |
 | Debian, Ubuntu (tested in CI) | `sudo apt-get install tesseract-ocr poppler-utils tesseract-ocr-deu tesseract-ocr-spa tesseract-ocr-fra tesseract-ocr-por tesseract-ocr-ita` |
 | macOS (Homebrew; CI job with the real-OCR tests, passed 2026-11-06) | `brew install tesseract tesseract-lang poppler` |
-| Windows (CI job with the real-OCR tests, passed 2026-11-06) | tesseract from the [UB Mannheim builds](https://github.com/UB-Mannheim/tesseract/wiki) and poppler from [poppler-windows](https://github.com/oschwartz10612/poppler-windows) (CI: `choco install tesseract poppler`); add both `bin` folders to `PATH`. Add the languages you need to tesseract's `tessdata` folder. |
+| Windows (CI job with the real-OCR tests, passed 2026-11-06) | tesseract from the [UB Mannheim builds](https://github.com/UB-Mannheim/tesseract/wiki) and poppler from [poppler-windows](https://github.com/oschwartz10612/poppler-windows) (CI: `choco install tesseract poppler`); add both `bin` folders to `PATH`. Add the languages you need to tesseract's `tessdata` folder. **Currently not used:** the runtime refuses to import this integration on Windows until it can check the import path's permissions there (N-22 R1, INT-007); CI asserts that refusal. |
 
 The programs are `tesseract` (4 or newer; tested with 5.3), `pdftoppm` and `pdfinfo` (both from poppler). Check
 with `tesseract --list-langs`: the languages used are `deu`, `eng`, `spa`, `fra`, `por` and `ita`, as far as they
 are installed. `osd` (installed with tesseract on Debian, Ubuntu and Homebrew) lets tesseract turn pages that were
-scanned sideways or upside down. `TESSDATA_PREFIX` points tesseract to another language data folder; that folder also needs tesseract's `configs/tsv`
-(copy the `configs` folder of the installation), or no text is read.
+scanned sideways or upside down. tesseract reads its language data from the folder of its installation (with
+tesseract's `configs/tsv`, or no text is read); `TESSDATA_PREFIX` is not passed to it (review F2), so add languages
+to that folder.
+
+The programs are looked up only in absolute `PATH` folders whose whole chain (the folder, every parent and the
+program file, symbolic links resolved) belongs to root and is writable by no group and no other user (owner decision
+2026-11-27), and never in a folder a Python package can put programs into: the interpreter's own `bin` or `Scripts` folder (a venv's
+`bin`) and any folder that holds a file named in an installed distribution's `RECORD` (N-22 NEW-5). Install the
+programs as system programs (apt, Homebrew, the Windows installers). A Python installed into the same `bin` folder
+as the programs (a system `/usr` Python, or Homebrew's `bin` after a `pip install` of a package with commands there)
+finds no program: run Nodestro from a venv. A folder the user owns is refused too, so OCR finds no program in
+Homebrew's `/opt/homebrew/bin` or `/usr/local/bin` (owned by the user who installed Homebrew) or in a conda
+environment's `bin`, and none in a folder another environment put on `PATH`. Remedy: install the programs with the
+system's package manager (apt, dnf) into `/usr/bin`, or, on macOS, give the programs' folders and files to root
+(`sudo chown root` and `sudo chmod go-w` along the chain, as this repository's macOS CI job does; Homebrew then needs
+`sudo` to update them). Every symbolic link on the way counts too: the link and the folder holding it must be root's
+alone, and the program is started by its real path, so a link is not followed again at start (review F1).
 
 ## The OCR
 
@@ -114,8 +129,16 @@ programs. A valid PDF without recognizable text gives an empty text, not an erro
 - The programs run without a shell, with fixed argument lists, from their full paths, in a temporary folder of
   their own (readable by the current user only) that is removed with all page images when the document is done or
   fails. The file name of the upload is used in messages only; the PDF is stored as `input.pdf`.
-- They get a reduced environment: `PATH`, locale, temporary folders, `TESSDATA_PREFIX`, library and font settings
-  and the variables Windows needs. API keys, tokens, proxy settings and other variables of the calling process are
+- The programs are looked up only in `PATH` folders that are absolute and, like the runtime's import path, can be
+  changed only by root and the current user (no other owner, not writable by every user or by another group, also
+  for every parent and for the program file itself). An empty or relative `PATH` element (the working directory) and
+  any other folder are skipped, so a program planted there is never run; without a usable copy OCR is unavailable.
+  On macOS, Homebrew's folders are writable by the `admin` group: remove that (`chmod g-w`) along the programs'
+  paths, or OCR finds no program. Windows does not check permissions (the runtime does not import this integration
+  there, see INT-007).
+- They get a reduced environment: `PATH` (only the folders above), locale, temporary folders,
+  font settings and the variables Windows needs; no `LD_*` or `DYLD_*` variable, so no other library is loaded into
+  them. API keys, tokens, proxy settings and other variables of the calling process are
   not passed on. This limits what a misbehaving program could leak; the programs still run with the rights of the
   current user, so a poppler or tesseract with a known vulnerability should be updated.
 - On Linux each program call starts with an address space limit (`RLIMIT_AS`, see "Limits"), and one process
@@ -124,6 +147,15 @@ programs. A valid PDF without recognizable text gives an empty text, not an erro
 
 ## Writing an integration
 
+**Never install an extension package into Nodestro's Python environment** (owner decision 2026-11-27). That
+environment holds only the shipped lock; the products have no pip. The runtime refuses every foreign package it finds
+there as "installed in the host environment": it is never imported, never offered and never sent to the sandbox, and
+its tools stay locked whatever `NODESTRO_EXTENSION_TOOLS` says. Foreign extensions will run only from the separate
+extension store (`<data>/extensions`, nodestro-runtime `docs/extension-isolation.md`), and only in the Docker
+sandbox; until that store is built and reviewed there is no supported way to add one. Only this repository's own
+integration, installed with the runtime as part of the lock, is imported into the host.
+
+The format below is the contract an extension package is written against (the store will read the same entry point).
 An integration is a distribution with an entry point in the group `nodestro.integrations` that names an
 `Integration` or a function returning one:
 
@@ -161,8 +193,9 @@ def integration() -> Integration:
     )
 ```
 
-- `tools` are trusted orkexa tools that run in the runtime's process and appear in the tool library like the
-  built-in tools; tool names must be unique.
+- `tools` are orkexa tools; tool names must be unique. Passed explicitly (`Workspace(integrations=[...])`, the
+  embedding application's own code) they run in the runtime's process like the built-in tools; tools of an installed
+  integration stay locked (see above).
 - `ocr` is an `OcrEngine`: a `name`, `available()` and `recognize(data, name)` returning an `OcrResult` or raising
   `DocumentError`. The runtime uses the first engine that is available.
 - State `contract` explicitly: the default is the runtime's current version, so an integration that relies on it is

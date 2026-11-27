@@ -12,7 +12,7 @@
 | P0 Critical | 0 |
 | P1 High | 0 |
 | P2 Medium | 0 |
-| P3 Low | 0 |
+| P3 Low | 1 |
 | P4 Optional | 3 |
 
 **Release blockers:** None. No entry blocks the frozen desktop candidate v0.2.0-preview.1 or the next preview;
@@ -63,6 +63,52 @@ None known.
 None known.
 
 ## Platform coverage
+
+### INT-007 · OCR discovery is refused on Windows and on unclosed interpreter directories (runtime R1)
+
+- **Priority:** P3 Low · **Status:** Open · **Refs:** nodestro-runtime PR #226 (`docs/extension-isolation.md`,
+  "Trust boundary of the host import (R1)"), this repository's CI step "Close the interpreter directories"
+- **What:** The runtime now imports this package as a trusted host integration only when it is installed next to
+  `nodestro_runtime` and the import path is closed (no user site, no entry writable by another user). Windows has no
+  such check yet, so the trusted import is locked there and OCR is unavailable. A machine or CI runner with a
+  writable interpreter prefix or an existing `~/.local` user site on the path is refused the same way; CI closes the
+  runner's interpreter directories first.
+- **Decided 2026-11-27 (owner, option b):** the lock on Windows is the intended behavior while the trust assumptions
+  cannot be proven there. The Windows real-OCR test asserts the refusal (reason, no import, no OCR text).
+- **Open:** an ACL check of the import path on Windows in the runtime; then lift the lock and restore the Windows
+  expectation of `test_real_ocr_through_knowledge_and_run_inputs`. Not a release blocker: no Windows desktop is built.
+- **Review 2026-11-27:** M2 done (programs only from closed `PATH` folders, no `LD_*`/`DYLD_*`; Windows does not
+  check them, as above). L5: the CI step "The runtime discovers the installed integration" (wheel job) proves only
+  that a normal wheel install next to the runtime is discovered and imported from its verified files (R2's path);
+  it does not prove R1. R1 is covered by the runtime's `tests/test_trusted_integrations.py` (forged copies, foreign
+  `RECORD`s, real pip, open import paths) and, end to end, by the Windows refusal assertion of the real-OCR test.
+  On macOS, Homebrew folders writable by the `admin` group make OCR find no program until `chmod g-w` (README).
+- **Re-review 2026-11-27 (runtime N1 to N5):** the runtime accepts only allowlisted `.pth` files (setuptools'
+  `distutils-precedence.pth`), so an environment with an editable install, a uv or virtualenv venv
+  (`_virtualenv.pth`), coverage or pytest-cov refuses the trusted import and OCR is unavailable there. This
+  repository's CI installs the package as a wheel into the runner's interpreter or a `python -m venv`, without such
+  files; the studio's components jobs run this suite with the studio installed as a wheel.
+- **Third review 2026-11-27 (runtime NEW-1, NEW-2):** a file named by two distributions' `RECORD`s and a loaded or
+  importable `sitecustomize`/`usercustomize` also refuse the trusted import. A Python that ships a `sitecustomize`
+  (some distribution and sandbox builds) has no OCR through the runtime; the hosted runners' Pythons have none.
+- **Fourth review 2026-11-27 (NEW-4, NEW-5):** NEW-5 done: the programs never come from the interpreter's own
+  program folders or a folder holding a `RECORD`-listed file. A system `/usr` Python finds no program in `/usr/bin`
+  (README). NEW-4 (a foreign module imported before the check) is not fixed in process by design: the host
+  environment must hold only the shipped lock; the runtime's data-only extension store is the planned fix
+  (nodestro-runtime `docs/extension-isolation.md`).
+- **Owner decision 2026-11-27 (binding):** foreign extension packages are never installed into the host environment
+  and never loaded or run in the host process; only this integration, from the lock and verified by the runtime, is.
+  Done here: the OCR programs come only from root-owned chains without group or other write (this closes the fourth
+  review's Low on another environment's `bin` on `PATH`; Homebrew and conda user `bin` folders are refused, README
+  remedy), and the README no longer tells anyone to install extensions into the host. The other Low (a false
+  refusal when an install scheme's scripts folder is the system's program folder) stays documented.
+  Cross-reference: the data-only extension store (nodestro-runtime RT-098) is a G-6 prerequisite; this package's
+  entry point format is what the store will read.
+- **Final review 2026-11-27:** F1 fixed (every link hop to a program and the folder holding it are checked, and the
+  real path runs); F2 fixed (`TESSDATA_PREFIX` is dropped from the programs' environment). Residual risk: on macOS,
+  Homebrew's library folders (`/opt/homebrew/lib`, owned by the user) are not checked; the programs load their
+  libraries from there, so the user who owns Homebrew can change what the programs run even when the program files
+  belong to root. The Linux products use root-owned `/usr`.
 
 ## Documentation
 
@@ -115,6 +161,7 @@ None known.
 |---|---|---|---|
 | (done 2026-11-20, W0-1) | nodestro-api, nodestro-studio | nodestro-api `scripts/studio_lock.sh` (same copy) | A master push of a merge commit reads the paired studio branch's lock while that branch is still ahead of the studio master (lock lag), else the master lock; `test_studio_lock.py` (curl stub). Keep the copies identical |
 | (in review 2026-11-20, Welle 1) | nodestro-api, nodestro-sdk, nodestro-runtime | `scripts/studio_lock.sh` (same copy), `GH_TOKEN` on each lock step | The lock-lag compare request uses the read-only workflow token; an API error reads the master lock with a "Lock lag unknown" warning naming the HTTP status (404: branch gone, no warning). `tests/test_studio_lock.py`. Keep the copies identical |
+| INT-007 (2026-11-27, N-22) | nodestro-runtime, nodestro-studio | runtime R1 trust boundary (PR #226), studio CI step "Close the interpreter directories" | OCR discovery depends on the runtime's location pin and closed import path; keep the CI steps in both repositories alike |
 | (pointer) | nodestro-studio | ST-052 (Dependabot policy: weekly groups, cooldown, manual merge; auto-merge prerequisites) | Full entry in studio |
 
 ## CI access to private repositories

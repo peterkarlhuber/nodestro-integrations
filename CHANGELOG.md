@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+- Security (final review F1, F2): every symbolic link on the way to an OCR program is checked hop by hop (the link
+  and the folder holding it must be root's alone) and the program runs by its real path, so a link through a folder
+  another user controls is refused and cannot be repointed before the start. `TESSDATA_PREFIX` is no longer passed to
+  the programs; tesseract reads the language data of its installation. New: `ocr.resolved`.
+  CI: the macOS real-OCR job also gives every link on the way to a program (Homebrew's `bin` links into its
+  Cellar) and the folder holding it to root, and prints what `find_program` resolves (about a second, no new job).
+
+- Security (owner decision 2026-11-27): the OCR programs come only from folders whose whole chain (folder, every
+  parent, program file) belongs to root and no group or other user can write; a folder of the user (Homebrew's or a
+  conda environment's `bin`, another environment's `bin` on `PATH`) is refused (README: remedy). New:
+  `ocr.program_owners`. CI: the macOS real-OCR job gives the programs' folders and files to root (about a second, no
+  new job). README "Writing an integration": extension packages are never installed into Nodestro's environment.
+
+- Security (N-22 fourth review NEW-5): the OCR programs are never taken from a folder a Python package can place
+  programs into: the interpreter's own program folders (`bin`/`Scripts` of `sys.prefix` and `sys.exec_prefix`, the
+  `scripts` path of every install scheme) and every folder holding a file named in an installed distribution's
+  `RECORD` (compared by device and inode). A foreign wheel's `.data/scripts/tesseract` in the venv's `bin`, which the
+  images put first on `PATH`, is no longer found or run. New: `ocr.python_folders`. Tests with a wheel installed by
+  the real pip (`test_a_program_a_wheel_installed_is_not_used`, `test_a_program_in_the_interpreters_own_folder_is_not_used`).
+
+- Security (N-22 independent review M2): the OCR programs are found only in absolute `PATH` folders that only root
+  and the current user can change (the program file and every parent too); empty, relative and other folders are
+  skipped, and the programs' `PATH` holds only those folders. `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and
+  `DYLD_FALLBACK_LIBRARY_PATH` are no longer passed on. New: `ocr.program_path`, `ocr.find_program`.
+- CI (review M1): the macOS real-OCR job gives the Python framework to the runner and removes the group's write
+  access along the interpreter's and the programs' paths (the runtime now refuses a folder of root that another
+  group can write); the Linux steps use `go-w` as before. About a second per job, no new job.
+
+- CI (N-22 R1): the jobs that let the runtime discover this integration close the hosted runner's interpreter
+  directories first (`chmod go-w`; writable by every user there), since the runtime now imports it only on a closed
+  import path. About a second per job, no new job. On Windows the runtime refuses the import (ACLs are not checked).
+- Tests (N-22 R1, owner decision): on Windows `test_real_ocr_through_knowledge_and_run_inputs` now asserts the
+  refusal: the integration is listed as locked (`invalid`) with the reason "the permissions of the import path cannot
+  be checked on this system", is never imported, and a scan added with OCR switched on gets `ocr: unavailable` and no
+  recognised text. The ACL check stays open as INT-007.
+
 - Tests: a flaky leak check fixed at its cause. `test_documents_wait_for_a_free_slot` found a `nodestro-resolve-*`
   directory in its temporary root (master f29a377, Python 3.11). It came from the previous test's `Workspace`: its
   process-wide Docker check ran on in the background with a Docker daemon present (CI runners) and its self-test

@@ -21,13 +21,17 @@ The engine is registered as the integration ``tesseract-ocr`` (entry point group
 
 from __future__ import annotations
 
+import csv
+from importlib import metadata
 import math
 import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
+import sysconfig
 import tempfile
 import threading
 import time
@@ -68,10 +72,6 @@ _ENV_NAMES = frozenset(
         "TMPDIR",
         "TEMP",
         "TMP",
-        "TESSDATA_PREFIX",
-        "LD_LIBRARY_PATH",
-        "DYLD_LIBRARY_PATH",
-        "DYLD_FALLBACK_LIBRARY_PATH",
         "FONTCONFIG_FILE",
         "FONTCONFIG_PATH",
         "XDG_CACHE_HOME",
@@ -105,12 +105,155 @@ def program_environment() -> dict[str, str]:
 
     ``OMP_THREAD_LIMIT`` defaults to 1, so that several documents recognized at the same time
     do not each claim every core (tesseract is not faster with more threads on one page).
+    ``PATH`` holds only the folders the programs are looked up in (:func:`program_path`); no ``LD_*`` or ``DYLD_*``
+    variable reaches them, so no other library is loaded into them (review M2).
     """
     environment = {
         name: value for name, value in os.environ.items() if name.upper() in _ENV_NAMES or name.startswith("LC_")
     }
+    environment["PATH"] = os.pathsep.join(program_path())
     environment.setdefault("OMP_THREAD_LIMIT", "1")
     return environment
+
+
+def program_owners() -> frozenset[int]:
+    """The users a program folder, the program file and every parent may belong to: root only (owner decision
+    2026-11-27). A folder of the current user (Homebrew's or conda's ``bin``) is refused: whatever runs as this user
+    could replace a program there."""
+    return frozenset({0})
+
+
+def _status(path: Path) -> os.stat_result:
+    return os.stat(path)
+
+
+def _chain(real: Path) -> list[Path]:
+    """The folders checked for ``real``: itself and every parent up to the root of the file system."""
+    return [real, *real.parents]
+
+
+def _unsafe(path: Path) -> bool:
+    """Whether ``path`` is not administered by root alone: another owner than :func:`program_owners`, or writable by
+    a group or by every user (no exception for sticky folders such as ``/tmp`` or for root's group)."""
+    try:
+        info = _status(path)
+    except OSError:
+        return True
+    if info.st_uid not in program_owners():
+        return True
+    return bool(info.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
+
+
+def _chain_closed(real: Path) -> bool:
+    return not any(_unsafe(folder) for folder in _chain(real))
+
+
+def resolved(path: Path) -> Path | None:
+    """The real path of ``path`` (absolute) when it and every parent belong to root and no group or other user can
+    write them, and so does every symbolic link met on the way: the link itself and the real folder holding it with
+    its parents (review F1: whoever can write a folder holding a link can repoint it). Links are resolved hop by hop,
+    as the runtime's import path check does; more than 40 or a loop: ``None``. Windows: ACLs are not read, the path
+    is only resolved there (the runtime locks its trusted import)."""
+    if os.name != "posix":
+        return Path(os.path.realpath(path))
+    parts = list(path.parts)
+    if not parts or not path.is_absolute():
+        return None
+    current = Path(parts.pop(0))
+    hops = 0
+    while parts:
+        part = parts.pop(0)
+        if part in ("", "."):
+            continue
+        if part == "..":
+            current = current.parent  # ``current`` is real (its links are resolved), so this is the kernel's parent
+            continue
+        candidate = current / part
+        try:
+            info = os.lstat(candidate)
+        except OSError:
+            current = candidate  # missing: the check of the result refuses it
+            continue
+        if not stat.S_ISLNK(info.st_mode):
+            current = candidate
+            continue
+        hops += 1
+        if hops > 40 or info.st_uid not in program_owners() or not _chain_closed(current):
+            return None
+        target = Path(os.readlink(candidate))
+        if target.is_absolute():
+            current, parts = Path(target.anchor), [*target.parts[1:], *parts]
+        else:
+            parts = [*target.parts, *parts]
+    return current if _chain_closed(current) else None
+
+
+def _closed(path: Path) -> bool:
+    """Whether :func:`resolved` accepts ``path``."""
+    return resolved(path) is not None
+
+
+def _identity(path: str | os.PathLike[str]) -> tuple[int, int] | None:
+    try:
+        info = os.stat(path)
+    except OSError:
+        return None
+    return info.st_dev, info.st_ino
+
+
+def python_folders() -> set[tuple[int, int]]:
+    """The folders Python packages can place programs in (review N-22 NEW-5), by device and inode: the interpreter's
+    own program folders (``bin`` or ``Scripts`` of its prefixes, of every install scheme) and every folder that holds
+    a file named in a distribution's ``RECORD``. A wheel's ``.data/scripts`` lands there, so a ``tesseract`` from a
+    package is never taken for the system's."""
+    folders: set[str] = set()
+    for prefix in {sys.prefix, sys.exec_prefix}:
+        folders |= {os.path.join(prefix, "bin"), os.path.join(prefix, "Scripts")}
+    for scheme in sysconfig.get_scheme_names():
+        try:
+            folders.add(sysconfig.get_path("scripts", scheme))
+        except (KeyError, ValueError):
+            continue
+    for distribution in metadata.distributions():
+        base = str(distribution.locate_file(""))
+        record = distribution.read_text("RECORD")
+        if record is not None:  # read directly: its folders, not its files, are needed (a tenth of the time)
+            named = {os.path.dirname(row[0]) for row in csv.reader(record.splitlines()) if row}
+        else:
+            named = {os.path.dirname(str(file)) for file in distribution.files or ()}
+        folders |= {os.path.normpath(os.path.join(base, folder)) for folder in named}
+    return {found for found in map(_identity, folders) if found is not None}
+
+
+def program_path() -> list[str]:
+    """The ``PATH`` folders the programs may come from (review M2, owner decision 2026-11-27): absolute, existing, and
+    with the whole chain owned by root and writable by no group or other user (:func:`_closed`). An empty or relative
+    element (the working directory) and a folder the user or another user could change are left out, so a program
+    placed there is never found or run. So is every folder of :func:`python_folders` (NEW-5): the
+    OCR programs are system programs, never ones a Python package installed."""
+    folders: list[str] = []
+    excluded: set[tuple[int, int]] | None = None
+    for element in os.environ.get("PATH", "").split(os.pathsep):
+        if not element or not os.path.isabs(element) or not os.path.isdir(element):
+            continue
+        if element in folders or not _closed(Path(element)):
+            continue
+        if excluded is None:
+            excluded = python_folders()
+        if _identity(element) not in excluded:
+            folders.append(element)
+    return folders
+
+
+def find_program(name: str) -> str | None:
+    """The real path of the program ``name`` in a folder of :func:`program_path`, when the file and every link on the
+    way to it pass :func:`resolved`; ``None`` when there is none. The real path is what runs (review F1), so a link
+    is not resolved again when the program starts."""
+    for folder in program_path():
+        found = shutil.which(name, path=folder)
+        if found is not None and (real := resolved(Path(found))) is not None:
+            return str(real)
+    return None
 
 
 def _setting(name: str, default: int, low: int, high: int) -> int:
@@ -185,7 +328,7 @@ def _limited(command: list[str]) -> list[str]:
 
 def _programs() -> dict[str, str] | None:
     """The full paths of the programs (``None`` when one is missing)."""
-    found = {name: shutil.which(name) for name in ("tesseract", "pdftoppm", "pdfinfo")}
+    found = {name: find_program(name) for name in ("tesseract", "pdftoppm", "pdfinfo")}
     return {name: path for name, path in found.items() if path is not None} if all(found.values()) else None
 
 
@@ -227,7 +370,7 @@ def tesseract_languages() -> str:
 
     Empty when tesseract is missing, cannot list its languages or has none of them.
     """
-    tesseract = shutil.which("tesseract")
+    tesseract = find_program("tesseract")
     return "+".join(_languages(tesseract)) if tesseract is not None else ""
 
 
@@ -262,7 +405,7 @@ def _pdf_info(pdfinfo: str, source: Path, name: str, deadline: float) -> tuple[i
 
 def page_count(source: Path) -> int | None:
     """The number of pages from poppler's ``pdfinfo`` (``None`` when it is missing or fails)."""
-    pdfinfo = shutil.which("pdfinfo")
+    pdfinfo = find_program("pdfinfo")
     if pdfinfo is None:
         return None
     try:

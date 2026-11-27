@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable
+import hashlib
+from importlib import metadata
 import json
 import os
 from pathlib import Path
+import shutil
 import stat
+import subprocess
 import sys
+import sysconfig
 import tempfile
 import threading
 import time
+import zipfile
 
 from nodestro_runtime.documents import DocumentError
 from nodestro_runtime.extensions import SUPPORTED_CONTRACTS, Extensions, Integration, OcrEngine, discover
@@ -209,6 +216,13 @@ def programs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Programs:
     folder = tmp_path / "bin"
     folder.mkdir()
     monkeypatch.setenv("PATH", str(folder))
+    # The simulated programs belong to the test user in a temporary folder. The product accepts only folders whose
+    # whole chain root owns (tested without this fixture below); here the rule applies within ``tmp_path``, with the
+    # test user counted as an administrator.
+    monkeypatch.setattr(
+        ocr, "_chain", lambda real: [real, *(item for item in real.parents if item.is_relative_to(tmp_path))]
+    )
+    monkeypatch.setattr(ocr, "program_owners", lambda: frozenset({0, os.geteuid()}))
     return Programs(folder)
 
 
@@ -219,6 +233,9 @@ def temp_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root.mkdir()
     monkeypatch.setattr(tempfile, "tempdir", str(root))
     return root
+
+
+posix_only = pytest.mark.skipif(os.name != "posix", reason="POSIX modes and owners")
 
 
 def _failure(run: Callable[[], object]) -> DocumentError:
@@ -425,10 +442,231 @@ def test_the_programs_get_no_secrets(programs: Programs, monkeypatch: pytest.Mon
         env = call["env"]
         assert isinstance(env, dict)
         assert "secret-value" not in env.values()
-        assert env["PATH"] == os.environ["PATH"] and env["TESSDATA_PREFIX"] == "/opt/tessdata"
+        assert env["PATH"] == os.environ["PATH"]
+        assert "TESSDATA_PREFIX" not in env  # review F2: the language data folder is never taken from the caller
         assert env["LC_ALL"] == "C.UTF-8" and env["OMP_THREAD_LIMIT"] == "1"
     monkeypatch.setenv("OMP_THREAD_LIMIT", "4")
     assert ocr.program_environment()["OMP_THREAD_LIMIT"] == "4"
+
+
+def test_no_library_variable_reaches_the_programs(programs: Programs, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review M2: ``LD_*`` and ``DYLD_*`` would load other libraries into the programs."""
+    for name in (
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "DYLD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_FALLBACK_LIBRARY_PATH",
+    ):
+        monkeypatch.setenv(name, "/somewhere/else")
+    ocr.run_ocr(b"%PDF-1.4", "scan.pdf")
+    for call in programs.calls():
+        env = call["env"]
+        assert isinstance(env, dict)
+        assert not [name for name in env if name.upper().startswith(("LD_", "DYLD_"))]
+
+
+@posix_only
+def test_programs_come_only_from_closed_path_folders(
+    programs: Programs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M2: a program in a folder every user can write, or in the working directory (an empty or relative
+    ``PATH`` element), is never found or run; the programs get only the closed folders as their ``PATH``."""
+    planted = tmp_path / "planted"
+    planted.mkdir()
+    marker = tmp_path / "planted-ran.txt"
+    for name in ("pdfinfo", "pdftoppm", "tesseract"):
+        path = planted / name
+        path.write_text(f"#!/bin/sh\necho planted > {marker}\nexit 1\n", encoding="utf-8")
+        path.chmod(0o755)
+    planted.chmod(0o777)
+    try:
+        monkeypatch.chdir(planted)
+        path = os.pathsep.join(["", ".", "planted", str(planted), str(programs.folder)])
+        monkeypatch.setenv("PATH", path)
+        assert ocr.program_path() == [str(programs.folder)]
+        assert ocr.find_program("tesseract") == os.path.realpath(programs.folder / "tesseract")
+        assert ocr.run_ocr(b"%PDF-1.4", "scan.pdf").pages == 2
+        assert not marker.exists()
+        assert {call["env"]["PATH"] for call in programs.calls()} == {str(programs.folder)}  # type: ignore[index]
+        # Only the planted folder: nothing is found, OCR is unavailable instead of running a planted program.
+        monkeypatch.setenv("PATH", os.pathsep.join(["", str(planted)]))
+        assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
+    finally:
+        planted.chmod(0o755)
+
+
+@posix_only
+def test_a_program_file_other_users_can_change_is_not_used(programs: Programs, monkeypatch: pytest.MonkeyPatch) -> None:
+    (programs.folder / "tesseract").chmod(0o777)
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available()
+    (programs.folder / "tesseract").chmod(0o755)
+    if os.stat(programs.folder).st_uid == 0:  # a folder of root is administered and accepted: give it to a user
+        os.chown(programs.folder, 4242, 4242)
+    monkeypatch.setattr(ocr, "program_owners", lambda: frozenset({0}))  # the product's rule: root only
+    assert ocr.program_path() == [] and ocr.find_program("tesseract") is None
+
+
+@posix_only
+def test_programs_come_only_from_folders_root_owns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Owner decision 2026-11-27: a program folder's whole chain must belong to root, writable by no group or other
+    user. A folder of the user (a Homebrew or conda ``bin``) is refused; a system folder such as the one of ``sh``
+    is accepted. Without the simulation fixture: the product's rule."""
+    marker = tmp_path / "planted-ran.txt"
+    planted = tmp_path / "user-bin"
+    planted.mkdir()
+    program = planted / "tesseract"
+    program.write_text(f"#!/bin/sh\necho planted > {marker}\nexit 1\n", encoding="utf-8")
+    program.chmod(0o755)
+    if os.geteuid() == 0:  # run as root: the folder is root's, but its group (root's) may write it, which is refused
+        os.chown(planted, 0, 0)
+        planted.chmod(0o775)
+    system = os.path.dirname(os.path.realpath(shutil.which("sh") or "/bin/sh"))
+    monkeypatch.setenv("PATH", os.pathsep.join([str(planted), system]))
+    assert ocr.program_path() == [system]
+    assert ocr.find_program("tesseract") in (None, os.path.realpath(os.path.join(system, "tesseract")))
+    monkeypatch.setenv("PATH", str(planted))
+    assert ocr.program_path() == [] and ocr.find_program("tesseract") is None
+    assert not ocr.ocr_available() and not marker.exists()
+
+
+@posix_only
+@pytest.mark.parametrize(
+    ("owner", "mode", "accepted"),
+    [
+        (0, 0o755, True),
+        (0, 0o775, False),  # root's folder writable by a group, also root's group
+        (0, 0o1777, False),  # sticky and writable by every user, like /tmp
+        (0, 0o757, False),
+        (4242, 0o755, False),  # another user's
+        (None, 0o755, False),  # the current user's (Homebrew, conda), when it is not root
+    ],
+)
+def test_every_folder_of_the_chain_must_be_roots_alone(
+    monkeypatch: pytest.MonkeyPatch, owner: int | None, mode: int, accepted: bool
+) -> None:
+    """The rule on each folder of the chain (``/opt/tools/bin`` and its parents), the middle one varied."""
+    uid = owner if owner is not None else (os.geteuid() or 501)
+
+    def status(path: Path) -> os.stat_result:
+        varied = str(path) == "/opt/tools"
+        return os.stat_result(
+            (stat.S_IFDIR | (mode if varied else 0o755), 0, 0, 0, uid if varied else 0, 0, 0, 0, 0, 0)
+        )
+
+    monkeypatch.setattr(ocr, "_status", status)
+    monkeypatch.setattr(ocr.os.path, "realpath", lambda path: str(path))
+    assert ocr._closed(Path("/opt/tools/bin")) is accepted
+
+
+@posix_only
+def test_a_link_through_a_folder_others_control_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review F1: a program folder links through another folder to the real program. Whoever owns or can write the
+    folder holding a link can repoint it between the check and the start, so every hop is checked, and the real path
+    is what runs. ``rootbin`` and ``real`` stand for root's folders (the test user counts as root here, the rule
+    applies within ``tmp_path``); ``hop`` is varied."""
+    monkeypatch.setattr(ocr, "_chain", lambda real: [real, *(up for up in real.parents if up.is_relative_to(tmp_path))])
+    monkeypatch.setattr(ocr, "program_owners", lambda: frozenset({0, os.geteuid()}))
+    rootbin, hop, real = tmp_path / "rootbin", tmp_path / "hop", tmp_path / "real"
+    for folder in (rootbin, hop, real):
+        folder.mkdir()
+    program = real / "tesseract"
+    program.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    program.chmod(0o755)
+    (hop / "tesseract").symlink_to(program)
+    (rootbin / "tesseract").symlink_to(Path("..") / "hop" / "tesseract")
+    monkeypatch.setenv("PATH", str(rootbin))
+    assert ocr.find_program("tesseract") == os.path.realpath(program)  # the real path, not rootbin/tesseract
+    # The folder holding the second link belongs to another user: refused.
+    hop_real = Path(os.path.realpath(hop))
+    actual = ocr._status
+    monkeypatch.setattr(
+        ocr,
+        "_status",
+        lambda path: (
+            os.stat_result((stat.S_IFDIR | 0o755, 0, 0, 0, 4242, 0, 0, 0, 0, 0))
+            if Path(path) == hop_real
+            else actual(path)
+        ),
+    )
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available()
+    monkeypatch.setattr(ocr, "_status", actual)
+    # The folder holding the link can be written by every user: refused.
+    hop.chmod(0o777)
+    try:
+        assert ocr.find_program("tesseract") is None
+    finally:
+        hop.chmod(0o755)
+    assert ocr.find_program("tesseract") == os.path.realpath(program)
+
+
+def _planted_wheel(folder: Path, marker: Path) -> Path:
+    """A foreign wheel whose ``.data/scripts`` holds a ``tesseract`` (review N-22 NEW-5), as pip installs it."""
+    name = "foreign_ocr_tools-1.0"
+    files = {
+        "foreign_ocr_tools/__init__.py": b"",
+        f"{name}.data/scripts/tesseract": f"#!/bin/sh\necho planted > {marker}\nexit 1\n".encode(),
+        f"{name}.dist-info/METADATA": b"Metadata-Version: 2.1\nName: foreign-ocr-tools\nVersion: 1.0\n",
+        f"{name}.dist-info/WHEEL": b"Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+    }
+    record = [
+        f"{path},sha256={base64.urlsafe_b64encode(hashlib.sha256(data).digest()).rstrip(b'=').decode()},{len(data)}"
+        for path, data in files.items()
+    ]
+    files[f"{name}.dist-info/RECORD"] = ("\n".join([*record, f"{name}.dist-info/RECORD,,"]) + "\n").encode()
+    wheel = folder / "foreign_ocr_tools-1.0-py3-none-any.whl"
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for path, data in files.items():
+            info = zipfile.ZipInfo(path)
+            info.external_attr = (0o755 if "/scripts/" in path else 0o644) << 16
+            archive.writestr(info, data)
+    return wheel
+
+
+def _pip_prefix(tmp_path: Path, marker: Path) -> Path:
+    """The planted wheel installed by the real pip into its own prefix; its ``tesseract`` lands in ``prefix/bin``."""
+    prefix = tmp_path / "prefix"
+    wheel = _planted_wheel(tmp_path, marker)
+    command = [sys.executable, "-m", "pip", "install", "--no-index", "--no-deps", "--no-compile", "--prefix"]
+    subprocess.run([*command, str(prefix), str(wheel)], check=True, capture_output=True)
+    assert (prefix / "bin" / "tesseract").is_file()
+    return prefix
+
+
+@posix_only
+def test_a_program_a_wheel_installed_is_not_used(
+    programs: Programs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review N-22 NEW-5: a foreign wheel places ``tesseract`` into a folder of its installation (the images put the
+    venv's ``bin`` first on ``PATH``). A folder holding a file named in a ``RECORD`` is never a program folder."""
+    marker = tmp_path / "planted-ran.txt"
+    prefix = _pip_prefix(tmp_path, marker)
+    site = sysconfig.get_path("purelib", vars={"base": str(prefix), "platbase": str(prefix)})
+    monkeypatch.syspath_prepend(site)  # the wheel's distribution is installed in this environment
+    planted = str(prefix / "bin")
+    monkeypatch.setenv("PATH", os.pathsep.join([planted, str(programs.folder)]))
+    assert ocr.program_path() == [str(programs.folder)]
+    assert ocr.find_program("tesseract") == os.path.realpath(programs.folder / "tesseract")
+    assert ocr.run_ocr(b"%PDF-1.4", "scan.pdf").pages == 2 and not marker.exists()
+    monkeypatch.setenv("PATH", planted)
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
+
+
+@posix_only
+def test_a_program_in_the_interpreters_own_folder_is_not_used(
+    programs: Programs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review N-22 NEW-5: the interpreter's own program folder (the venv's ``bin``) is a package's folder too, also
+    when the distribution that put the program there is not visible to this process."""
+    marker = tmp_path / "planted-ran.txt"
+    prefix = _pip_prefix(tmp_path, marker)
+    monkeypatch.setattr(sys, "prefix", str(prefix))  # the wheel was installed into this interpreter's prefix
+    planted = str(prefix / "bin")
+    monkeypatch.setenv("PATH", os.pathsep.join([planted, str(programs.folder)]))
+    assert ocr.program_path() == [str(programs.folder)]
+    assert ocr.find_program("tesseract") == os.path.realpath(programs.folder / "tesseract")
+    monkeypatch.setenv("PATH", planted)
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
 
 
 # ---- the runtime's contract -----------------------------------------------------------
@@ -567,12 +805,56 @@ def test_real_ocr_rejects_damaged_and_protected_pdfs() -> None:
         assert error.code == "document.ocr_failed" and "damaged" in str(error)
 
 
+# The runtime imports this package as a trusted host integration only on a closed import path (runtime R1, owner
+# decision in N-22). Windows has no permission check for it yet (INT-007), so there the import is locked: the
+# integration must be refused and no OCR may run, even with the real programs installed.
+_HOST_IMPORT_LOCKED = os.name == "nt"
+_WINDOWS_REFUSAL = (
+    "claims to be nodestro-integrations but the import path is not closed: "
+    "the permissions of the import path cannot be checked on this system"
+)
+
+
+def _assert_refused_on_windows(workspace: Workspace, data: bytes) -> None:
+    """The locked host import: listed as refused with its reason, never imported, and no text recognised."""
+    assert [integration.name for integration in discover(data_dir=workspace.data_dir)] == []
+    refused = [package for package in workspace.extensions.packages_status() if package["name"] == "tesseract-ocr"]
+    assert refused == [
+        {
+            "name": "tesseract-ocr",
+            "distribution": "nodestro-integrations",
+            "version": metadata.version("nodestro-integrations"),
+            "state": "locked",
+            "reason": "invalid",
+            "message": "locked, not sufficiently secured",
+            "detail": _WINDOWS_REFUSAL,
+            "tools": [],
+        }
+    ]
+    assert workspace.extensions.integrations == [] and workspace.extensions.ocr() is None
+    assert workspace.settings().ocr_available is False
+
+    # Switching OCR on changes nothing: the scan is stored, but no program reads it.
+    workspace.update_settings(SettingsIn(ocr_enabled=True))
+    entry = workspace.knowledge.add(data, name="scan-lieferschein.pdf")
+    assert entry.ocr == "unavailable" and not entry.ocr_words
+    assert workspace.knowledge.search("Lieferschein") == []
+    assert "4711" not in workspace.knowledge.text_of(entry.id)
+    item = workspace.inputs.add(data, name="scan.pdf")
+    assert "input.ocr_used" not in item.notes
+    extracted = workspace.inputs.extracted(item.id)
+    assert "Lieferschein" not in extracted.text and "Text recognised by OCR" not in extracted.text
+
+
 def test_real_ocr_through_knowledge_and_run_inputs(tmp_path: Path) -> None:
-    """Scanned PDF -> OCR -> knowledge index -> search, and as a run input file."""
+    """Scanned PDF -> OCR -> knowledge index -> search, and as a run input file (on Windows: refused, see above)."""
     _real("deu")
     data = (DATA / "scan-lieferschein.pdf").read_bytes()
     workspace = Workspace(tmp_path / "data")
     try:
+        if _HOST_IMPORT_LOCKED:
+            _assert_refused_on_windows(workspace, data)
+            return
         # OCR is off by default: the scan is stored, but not read.
         assert workspace.settings().ocr_available is True and workspace.settings().ocr_enabled is False
         assert workspace.knowledge.add(data, name="first.pdf").ocr is None
