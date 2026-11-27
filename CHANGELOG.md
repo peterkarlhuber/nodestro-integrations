@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Tests: a flaky leak check fixed at its cause. `test_documents_wait_for_a_free_slot` found a `nodestro-resolve-*`
+  directory in its temporary root (master f29a377, Python 3.11). It came from the previous test's `Workspace`: its
+  process-wide Docker check ran on in the background with a Docker daemon present (CI runners) and its self-test
+  resolved the runtime image with `uv pip compile` in a temporary directory, while the next test had redirected
+  `tempfile`. `tests/conftest.py` now gives every test the runtime's fixed stand-in monitor
+  (`nodestro_runtime.testing.StaticDockerMonitor`), as the runtime's own tests do; none of these tests needs Docker.
+  `test_a_workspace_here_starts_no_docker_check` fails without it. The leak check itself is unchanged. The wheel
+  install of #95 is unrelated: every `Workspace` starts that check, however this package is installed; the
+  failure needs only a Docker daemon and a slow enough self-test (seen since mid-November).
 - CI (N-22): the tests install this package as a wheel, not editable. nodestro-runtime (N-22, review F1) imports
   the entry point only from a wheel install whose files match the hashes in its `RECORD`; an editable install lists no
   package files there and is not trusted. The README's development install says the same.

@@ -509,6 +509,22 @@ def test_a_workspace_without_integrations_has_no_ocr(programs: Programs, tmp_pat
         workspace.close()
 
 
+def test_a_workspace_here_starts_no_docker_check(tmp_path: Path) -> None:
+    """With the real PATH (as the real OCR tests run), a workspace starts no Docker check or reaper that could outlive
+    the test: its runtime image resolve once left a ``nodestro-resolve-*`` directory in the next test's temporary root
+    (tests/conftest.py)."""
+    before = set(threading.enumerate())
+    workspace = Workspace(tmp_path / "data")
+    try:
+        started = [
+            thread.name for thread in set(threading.enumerate()) - before if thread.name.startswith("nodestro-docker")
+        ]
+        assert started == []
+        assert workspace.docker_monitor.status().state == "unavailable"
+    finally:
+        workspace.close()
+
+
 # ---- the real programs ----------------------------------------------------------------
 
 # CI sets NODESTRO_REQUIRE_REAL_OCR=1: there a missing program fails these tests instead of skipping them.
