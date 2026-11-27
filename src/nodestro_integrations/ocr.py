@@ -26,6 +26,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -69,9 +70,6 @@ _ENV_NAMES = frozenset(
         "TEMP",
         "TMP",
         "TESSDATA_PREFIX",
-        "LD_LIBRARY_PATH",
-        "DYLD_LIBRARY_PATH",
-        "DYLD_FALLBACK_LIBRARY_PATH",
         "FONTCONFIG_FILE",
         "FONTCONFIG_PATH",
         "XDG_CACHE_HOME",
@@ -105,12 +103,67 @@ def program_environment() -> dict[str, str]:
 
     ``OMP_THREAD_LIMIT`` defaults to 1, so that several documents recognized at the same time
     do not each claim every core (tesseract is not faster with more threads on one page).
+    ``PATH`` holds only the folders the programs are looked up in (:func:`program_path`); no ``LD_*`` or ``DYLD_*``
+    variable reaches them, so no other library is loaded into them (review M2).
     """
     environment = {
         name: value for name, value in os.environ.items() if name.upper() in _ENV_NAMES or name.startswith("LC_")
     }
+    environment["PATH"] = os.pathsep.join(program_path())
     environment.setdefault("OMP_THREAD_LIMIT", "1")
     return environment
+
+
+def _ids() -> tuple[int, int]:
+    return os.geteuid(), os.getegid()
+
+
+def _unsafe(path: Path, *, own: bool) -> bool:
+    """Whether another user than root and this one could change ``path`` (the rule of the runtime's import path
+    check, ``nodestro_runtime.trusted_integrations``): another owner, writable by every user (a parent with the sticky
+    bit, like ``/tmp``, excepted), or writable by a group other than root's and this process's own."""
+    euid, egid = _ids()
+    try:
+        info = os.stat(path)
+    except OSError:
+        return True
+    if info.st_uid not in (0, euid):
+        return True
+    if info.st_mode & stat.S_IWOTH and (own or not info.st_mode & stat.S_ISVTX):
+        return True
+    return bool(info.st_mode & stat.S_IWGRP and info.st_gid not in (0, egid))
+
+
+def _closed(path: Path) -> bool:
+    """Whether ``path`` (an existing file or folder, resolved) and every parent can be changed only by root and this
+    user. Windows: ACLs are not read, only absolute folders count there (the runtime locks its trusted import)."""
+    if os.name != "posix":
+        return True
+    real = Path(os.path.realpath(path))
+    return not any(_unsafe(folder, own=index == 0) for index, folder in enumerate([real, *real.parents]))
+
+
+def program_path() -> list[str]:
+    """The ``PATH`` folders the programs may come from (review M2): absolute, existing, and closed like the runtime's
+    import path. An empty or relative element (the working directory) and a folder another user could change are left
+    out, so a program placed there is never found or run."""
+    folders: list[str] = []
+    for element in os.environ.get("PATH", "").split(os.pathsep):
+        if not element or not os.path.isabs(element) or not os.path.isdir(element):
+            continue
+        if element not in folders and _closed(Path(element)):
+            folders.append(element)
+    return folders
+
+
+def find_program(name: str) -> str | None:
+    """The full path of the program ``name`` in a folder of :func:`program_path` whose file is closed too (its
+    symbolic links resolved); ``None`` when there is none."""
+    for folder in program_path():
+        found = shutil.which(name, path=folder)
+        if found is not None and _closed(Path(found)):
+            return found
+    return None
 
 
 def _setting(name: str, default: int, low: int, high: int) -> int:
@@ -185,7 +238,7 @@ def _limited(command: list[str]) -> list[str]:
 
 def _programs() -> dict[str, str] | None:
     """The full paths of the programs (``None`` when one is missing)."""
-    found = {name: shutil.which(name) for name in ("tesseract", "pdftoppm", "pdfinfo")}
+    found = {name: find_program(name) for name in ("tesseract", "pdftoppm", "pdfinfo")}
     return {name: path for name, path in found.items() if path is not None} if all(found.values()) else None
 
 
@@ -227,7 +280,7 @@ def tesseract_languages() -> str:
 
     Empty when tesseract is missing, cannot list its languages or has none of them.
     """
-    tesseract = shutil.which("tesseract")
+    tesseract = find_program("tesseract")
     return "+".join(_languages(tesseract)) if tesseract is not None else ""
 
 
@@ -262,7 +315,7 @@ def _pdf_info(pdfinfo: str, source: Path, name: str, deadline: float) -> tuple[i
 
 def page_count(source: Path) -> int | None:
     """The number of pages from poppler's ``pdfinfo`` (``None`` when it is missing or fails)."""
-    pdfinfo = shutil.which("pdfinfo")
+    pdfinfo = find_program("pdfinfo")
     if pdfinfo is None:
         return None
     try:

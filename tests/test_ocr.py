@@ -222,6 +222,9 @@ def temp_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
+posix_only = pytest.mark.skipif(os.name != "posix", reason="POSIX modes and owners")
+
+
 def _failure(run: Callable[[], object]) -> DocumentError:
     with pytest.raises(DocumentError) as raised:
         run()
@@ -430,6 +433,65 @@ def test_the_programs_get_no_secrets(programs: Programs, monkeypatch: pytest.Mon
         assert env["LC_ALL"] == "C.UTF-8" and env["OMP_THREAD_LIMIT"] == "1"
     monkeypatch.setenv("OMP_THREAD_LIMIT", "4")
     assert ocr.program_environment()["OMP_THREAD_LIMIT"] == "4"
+
+
+def test_no_library_variable_reaches_the_programs(programs: Programs, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review M2: ``LD_*`` and ``DYLD_*`` would load other libraries into the programs."""
+    for name in (
+        "LD_LIBRARY_PATH",
+        "LD_PRELOAD",
+        "DYLD_LIBRARY_PATH",
+        "DYLD_INSERT_LIBRARIES",
+        "DYLD_FALLBACK_LIBRARY_PATH",
+    ):
+        monkeypatch.setenv(name, "/somewhere/else")
+    ocr.run_ocr(b"%PDF-1.4", "scan.pdf")
+    for call in programs.calls():
+        env = call["env"]
+        assert isinstance(env, dict)
+        assert not [name for name in env if name.upper().startswith(("LD_", "DYLD_"))]
+
+
+@posix_only
+def test_programs_come_only_from_closed_path_folders(
+    programs: Programs, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review M2: a program in a folder every user can write, or in the working directory (an empty or relative
+    ``PATH`` element), is never found or run; the programs get only the closed folders as their ``PATH``."""
+    planted = tmp_path / "planted"
+    planted.mkdir()
+    marker = tmp_path / "planted-ran.txt"
+    for name in ("pdfinfo", "pdftoppm", "tesseract"):
+        path = planted / name
+        path.write_text(f"#!/bin/sh\necho planted > {marker}\nexit 1\n", encoding="utf-8")
+        path.chmod(0o755)
+    planted.chmod(0o777)
+    try:
+        monkeypatch.chdir(planted)
+        path = os.pathsep.join(["", ".", "planted", str(planted), str(programs.folder)])
+        monkeypatch.setenv("PATH", path)
+        assert ocr.program_path() == [str(programs.folder)]
+        assert ocr.find_program("tesseract") == str(programs.folder / "tesseract")
+        assert ocr.run_ocr(b"%PDF-1.4", "scan.pdf").pages == 2
+        assert not marker.exists()
+        assert {call["env"]["PATH"] for call in programs.calls()} == {str(programs.folder)}  # type: ignore[index]
+        # Only the planted folder: nothing is found, OCR is unavailable instead of running a planted program.
+        monkeypatch.setenv("PATH", os.pathsep.join(["", str(planted)]))
+        assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
+    finally:
+        planted.chmod(0o755)
+
+
+@posix_only
+def test_a_program_file_other_users_can_change_is_not_used(programs: Programs, monkeypatch: pytest.MonkeyPatch) -> None:
+    (programs.folder / "tesseract").chmod(0o777)
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available()
+    (programs.folder / "tesseract").chmod(0o755)
+    if os.stat(programs.folder).st_uid == 0:  # a folder of root is administered and accepted: give it to a user
+        os.chown(programs.folder, 4242, 4242)
+    real = os.stat(programs.folder)
+    monkeypatch.setattr(ocr, "_ids", lambda: (real.st_uid + 1, real.st_gid))  # the folder is another user's
+    assert ocr.program_path() == [] and ocr.find_program("tesseract") is None
 
 
 # ---- the runtime's contract -----------------------------------------------------------

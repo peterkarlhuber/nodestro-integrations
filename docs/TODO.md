@@ -77,6 +77,12 @@ None known.
   cannot be proven there. The Windows real-OCR test asserts the refusal (reason, no import, no OCR text).
 - **Open:** an ACL check of the import path on Windows in the runtime; then lift the lock and restore the Windows
   expectation of `test_real_ocr_through_knowledge_and_run_inputs`. Not a release blocker: no Windows desktop is built.
+- **Review 2026-11-27:** M2 done (programs only from closed `PATH` folders, no `LD_*`/`DYLD_*`; Windows does not
+  check them, as above). L5: the CI step "The runtime discovers the installed integration" (wheel job) proves only
+  that a normal wheel install next to the runtime is discovered and imported from its verified files (R2's path);
+  it does not prove R1. R1 is covered by the runtime's `tests/test_trusted_integrations.py` (forged copies, foreign
+  `RECORD`s, real pip, open import paths) and, end to end, by the Windows refusal assertion of the real-OCR test.
+  On macOS, Homebrew folders writable by the `admin` group make OCR find no program until `chmod g-w` (README).
 
 ## Documentation
 

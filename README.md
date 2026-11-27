@@ -114,8 +114,16 @@ programs. A valid PDF without recognizable text gives an empty text, not an erro
 - The programs run without a shell, with fixed argument lists, from their full paths, in a temporary folder of
   their own (readable by the current user only) that is removed with all page images when the document is done or
   fails. The file name of the upload is used in messages only; the PDF is stored as `input.pdf`.
-- They get a reduced environment: `PATH`, locale, temporary folders, `TESSDATA_PREFIX`, library and font settings
-  and the variables Windows needs. API keys, tokens, proxy settings and other variables of the calling process are
+- The programs are looked up only in `PATH` folders that are absolute and, like the runtime's import path, can be
+  changed only by root and the current user (no other owner, not writable by every user or by another group, also
+  for every parent and for the program file itself). An empty or relative `PATH` element (the working directory) and
+  any other folder are skipped, so a program planted there is never run; without a usable copy OCR is unavailable.
+  On macOS, Homebrew's folders are writable by the `admin` group: remove that (`chmod g-w`) along the programs'
+  paths, or OCR finds no program. Windows does not check permissions (the runtime does not import this integration
+  there, see INT-007).
+- They get a reduced environment: `PATH` (only the folders above), locale, temporary folders, `TESSDATA_PREFIX`,
+  font settings and the variables Windows needs; no `LD_*` or `DYLD_*` variable, so no other library is loaded into
+  them. API keys, tokens, proxy settings and other variables of the calling process are
   not passed on. This limits what a misbehaving program could leak; the programs still run with the rights of the
   current user, so a poppler or tesseract with a known vulnerability should be updated.
 - On Linux each program call starts with an address space limit (`RLIMIT_AS`, see "Limits"), and one process

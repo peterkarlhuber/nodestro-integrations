@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Security (N-22 independent review M2): the OCR programs are found only in absolute `PATH` folders that only root
+  and the current user can change (the program file and every parent too); empty, relative and other folders are
+  skipped, and the programs' `PATH` holds only those folders. `LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and
+  `DYLD_FALLBACK_LIBRARY_PATH` are no longer passed on. New: `ocr.program_path`, `ocr.find_program`.
+- CI (review M1): the macOS real-OCR job gives the Python framework to the runner and removes the group's write
+  access along the interpreter's and the programs' paths (the runtime now refuses a folder of root that another
+  group can write); the Linux steps use `go-w` as before. About a second per job, no new job.
+
 - CI (N-22 R1): the jobs that let the runtime discover this integration close the hosted runner's interpreter
   directories first (`chmod go-w`; writable by every user there), since the runtime now imports it only on a closed
   import path. About a second per job, no new job. On Windows the runtime refuses the import (ACLs are not checked).
