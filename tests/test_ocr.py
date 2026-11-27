@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from importlib import metadata
 import json
 import os
 from pathlib import Path
@@ -567,12 +568,56 @@ def test_real_ocr_rejects_damaged_and_protected_pdfs() -> None:
         assert error.code == "document.ocr_failed" and "damaged" in str(error)
 
 
+# The runtime imports this package as a trusted host integration only on a closed import path (runtime R1, owner
+# decision in N-22). Windows has no permission check for it yet (INT-007), so there the import is locked: the
+# integration must be refused and no OCR may run, even with the real programs installed.
+_HOST_IMPORT_LOCKED = os.name == "nt"
+_WINDOWS_REFUSAL = (
+    "claims to be nodestro-integrations but the import path is not closed: "
+    "the permissions of the import path cannot be checked on this system"
+)
+
+
+def _assert_refused_on_windows(workspace: Workspace, data: bytes) -> None:
+    """The locked host import: listed as refused with its reason, never imported, and no text recognised."""
+    assert [integration.name for integration in discover(data_dir=workspace.data_dir)] == []
+    refused = [package for package in workspace.extensions.packages_status() if package["name"] == "tesseract-ocr"]
+    assert refused == [
+        {
+            "name": "tesseract-ocr",
+            "distribution": "nodestro-integrations",
+            "version": metadata.version("nodestro-integrations"),
+            "state": "locked",
+            "reason": "invalid",
+            "message": "locked, not sufficiently secured",
+            "detail": _WINDOWS_REFUSAL,
+            "tools": [],
+        }
+    ]
+    assert workspace.extensions.integrations == [] and workspace.extensions.ocr() is None
+    assert workspace.settings().ocr_available is False
+
+    # Switching OCR on changes nothing: the scan is stored, but no program reads it.
+    workspace.update_settings(SettingsIn(ocr_enabled=True))
+    entry = workspace.knowledge.add(data, name="scan-lieferschein.pdf")
+    assert entry.ocr == "unavailable" and not entry.ocr_words
+    assert workspace.knowledge.search("Lieferschein") == []
+    assert "4711" not in workspace.knowledge.text_of(entry.id)
+    item = workspace.inputs.add(data, name="scan.pdf")
+    assert "input.ocr_used" not in item.notes
+    extracted = workspace.inputs.extracted(item.id)
+    assert "Lieferschein" not in extracted.text and "Text recognised by OCR" not in extracted.text
+
+
 def test_real_ocr_through_knowledge_and_run_inputs(tmp_path: Path) -> None:
-    """Scanned PDF -> OCR -> knowledge index -> search, and as a run input file."""
+    """Scanned PDF -> OCR -> knowledge index -> search, and as a run input file (on Windows: refused, see above)."""
     _real("deu")
     data = (DATA / "scan-lieferschein.pdf").read_bytes()
     workspace = Workspace(tmp_path / "data")
     try:
+        if _HOST_IMPORT_LOCKED:
+            _assert_refused_on_windows(workspace, data)
+            return
         # OCR is off by default: the scan is stored, but not read.
         assert workspace.settings().ocr_available is True and workspace.settings().ocr_enabled is False
         assert workspace.knowledge.add(data, name="first.pdf").ocr is None

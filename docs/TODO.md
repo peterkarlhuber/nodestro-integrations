@@ -66,15 +66,17 @@ None known.
 
 ### INT-007 · OCR discovery is refused on Windows and on unclosed interpreter directories (runtime R1)
 
-- **Priority:** P3 Low · **Status:** Needs decision · **Refs:** nodestro-runtime PR #226 (`docs/extension-isolation.md`,
+- **Priority:** P3 Low · **Status:** Open · **Refs:** nodestro-runtime PR #226 (`docs/extension-isolation.md`,
   "Trust boundary of the host import (R1)"), this repository's CI step "Close the interpreter directories"
 - **What:** The runtime now imports this package as a trusted host integration only when it is installed next to
   `nodestro_runtime` and the import path is closed (no user site, no entry writable by another user). Windows has no
-  such check yet, so the trusted import is locked there and OCR is unavailable; the Windows real-OCR test fails by
-  design until this is decided. A machine or CI runner with a writable interpreter prefix or an existing
-  `~/.local` user site on the path is refused the same way; CI closes the runner's interpreter directories first.
-- **Decision needed:** (a) implement an ACL check on Windows in the runtime, or (b) accept the lock and change the
-  Windows expectation of the real-OCR test. Not a release blocker: no Windows desktop is built.
+  such check yet, so the trusted import is locked there and OCR is unavailable. A machine or CI runner with a
+  writable interpreter prefix or an existing `~/.local` user site on the path is refused the same way; CI closes the
+  runner's interpreter directories first.
+- **Decided 2026-11-27 (owner, option b):** the lock on Windows is the intended behavior while the trust assumptions
+  cannot be proven there. The Windows real-OCR test asserts the refusal (reason, no import, no OCR text).
+- **Open:** an ACL check of the import path on Windows in the runtime; then lift the lock and restore the Windows
+  expectation of `test_real_ocr_through_knowledge_and_run_inputs`. Not a release blocker: no Windows desktop is built.
 
 ## Documentation
 

@@ -5,6 +5,10 @@
 - CI (N-22 R1): the jobs that let the runtime discover this integration close the hosted runner's interpreter
   directories first (`chmod go-w`; writable by every user there), since the runtime now imports it only on a closed
   import path. About a second per job, no new job. On Windows the runtime refuses the import (ACLs are not checked).
+- Tests (N-22 R1, owner decision): on Windows `test_real_ocr_through_knowledge_and_run_inputs` now asserts the
+  refusal: the integration is listed as locked (`invalid`) with the reason "the permissions of the import path cannot
+  be checked on this system", is never imported, and a scan added with OCR switched on gets `ocr: unavailable` and no
+  recognised text. The ACL check stays open as INT-007.
 
 - Tests: a flaky leak check fixed at its cause. `test_documents_wait_for_a_free_slot` found a `nodestro-resolve-*`
   directory in its temporary root (master f29a377, Python 3.11). It came from the previous test's `Workspace`: its
