@@ -102,8 +102,13 @@ None known.
   review's Low on another environment's `bin` on `PATH`; Homebrew and conda user `bin` folders are refused, README
   remedy), and the README no longer tells anyone to install extensions into the host. The other Low (a false
   refusal when an install scheme's scripts folder is the system's program folder) stays documented.
-  Cross-reference: the data-only extension store (nodestro-runtime RT-084) is a G-6 prerequisite; this package's
+  Cross-reference: the data-only extension store (nodestro-runtime RT-098) is a G-6 prerequisite; this package's
   entry point format is what the store will read.
+- **Final review 2026-11-27:** F1 fixed (every link hop to a program and the folder holding it are checked, and the
+  real path runs); F2 fixed (`TESSDATA_PREFIX` is dropped from the programs' environment). Residual risk: on macOS,
+  Homebrew's library folders (`/opt/homebrew/lib`, owned by the user) are not checked; the programs load their
+  libraries from there, so the user who owns Homebrew can change what the programs run even when the program files
+  belong to root. The Linux products use root-owned `/usr`.
 
 ## Documentation
 

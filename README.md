@@ -51,8 +51,9 @@ OCR also needs three programs on `PATH` and tesseract language data for at least
 The programs are `tesseract` (4 or newer; tested with 5.3), `pdftoppm` and `pdfinfo` (both from poppler). Check
 with `tesseract --list-langs`: the languages used are `deu`, `eng`, `spa`, `fra`, `por` and `ita`, as far as they
 are installed. `osd` (installed with tesseract on Debian, Ubuntu and Homebrew) lets tesseract turn pages that were
-scanned sideways or upside down. `TESSDATA_PREFIX` points tesseract to another language data folder; that folder also needs tesseract's `configs/tsv`
-(copy the `configs` folder of the installation), or no text is read.
+scanned sideways or upside down. tesseract reads its language data from the folder of its installation (with
+tesseract's `configs/tsv`, or no text is read); `TESSDATA_PREFIX` is not passed to it (review F2), so add languages
+to that folder.
 
 The programs are looked up only in absolute `PATH` folders whose whole chain (the folder, every parent and the
 program file, symbolic links resolved) belongs to root and is writable by no group and no other user (owner decision
@@ -65,7 +66,8 @@ Homebrew's `/opt/homebrew/bin` or `/usr/local/bin` (owned by the user who instal
 environment's `bin`, and none in a folder another environment put on `PATH`. Remedy: install the programs with the
 system's package manager (apt, dnf) into `/usr/bin`, or, on macOS, give the programs' folders and files to root
 (`sudo chown root` and `sudo chmod go-w` along the chain, as this repository's macOS CI job does; Homebrew then needs
-`sudo` to update them).
+`sudo` to update them). Every symbolic link on the way counts too: the link and the folder holding it must be root's
+alone, and the program is started by its real path, so a link is not followed again at start (review F1).
 
 ## The OCR
 
@@ -134,7 +136,7 @@ programs. A valid PDF without recognizable text gives an empty text, not an erro
   On macOS, Homebrew's folders are writable by the `admin` group: remove that (`chmod g-w`) along the programs'
   paths, or OCR finds no program. Windows does not check permissions (the runtime does not import this integration
   there, see INT-007).
-- They get a reduced environment: `PATH` (only the folders above), locale, temporary folders, `TESSDATA_PREFIX`,
+- They get a reduced environment: `PATH` (only the folders above), locale, temporary folders,
   font settings and the variables Windows needs; no `LD_*` or `DYLD_*` variable, so no other library is loaded into
   them. API keys, tokens, proxy settings and other variables of the calling process are
   not passed on. This limits what a misbehaving program could leak; the programs still run with the rights of the

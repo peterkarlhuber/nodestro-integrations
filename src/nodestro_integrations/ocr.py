@@ -72,7 +72,6 @@ _ENV_NAMES = frozenset(
         "TMPDIR",
         "TEMP",
         "TMP",
-        "TESSDATA_PREFIX",
         "FONTCONFIG_FILE",
         "FONTCONFIG_PATH",
         "XDG_CACHE_HOME",
@@ -145,13 +144,53 @@ def _unsafe(path: Path) -> bool:
     return bool(info.st_mode & (stat.S_IWGRP | stat.S_IWOTH))
 
 
-def _closed(path: Path) -> bool:
-    """Whether ``path`` (an existing file or folder, its symbolic links resolved) and every parent belong to root and
-    no group or other user can write them. Windows: ACLs are not read, only absolute folders count there (the runtime
-    locks its trusted import)."""
+def _chain_closed(real: Path) -> bool:
+    return not any(_unsafe(folder) for folder in _chain(real))
+
+
+def resolved(path: Path) -> Path | None:
+    """The real path of ``path`` (absolute) when it and every parent belong to root and no group or other user can
+    write them, and so does every symbolic link met on the way: the link itself and the real folder holding it with
+    its parents (review F1: whoever can write a folder holding a link can repoint it). Links are resolved hop by hop,
+    as the runtime's import path check does; more than 40 or a loop: ``None``. Windows: ACLs are not read, the path
+    is only resolved there (the runtime locks its trusted import)."""
     if os.name != "posix":
-        return True
-    return not any(_unsafe(folder) for folder in _chain(Path(os.path.realpath(path))))
+        return Path(os.path.realpath(path))
+    parts = list(path.parts)
+    if not parts or not path.is_absolute():
+        return None
+    current = Path(parts.pop(0))
+    hops = 0
+    while parts:
+        part = parts.pop(0)
+        if part in ("", "."):
+            continue
+        if part == "..":
+            current = current.parent  # ``current`` is real (its links are resolved), so this is the kernel's parent
+            continue
+        candidate = current / part
+        try:
+            info = os.lstat(candidate)
+        except OSError:
+            current = candidate  # missing: the check of the result refuses it
+            continue
+        if not stat.S_ISLNK(info.st_mode):
+            current = candidate
+            continue
+        hops += 1
+        if hops > 40 or info.st_uid not in program_owners() or not _chain_closed(current):
+            return None
+        target = Path(os.readlink(candidate))
+        if target.is_absolute():
+            current, parts = Path(target.anchor), [*target.parts[1:], *parts]
+        else:
+            parts = [*target.parts, *parts]
+    return current if _chain_closed(current) else None
+
+
+def _closed(path: Path) -> bool:
+    """Whether :func:`resolved` accepts ``path``."""
+    return resolved(path) is not None
 
 
 def _identity(path: str | os.PathLike[str]) -> tuple[int, int] | None:
@@ -207,12 +246,13 @@ def program_path() -> list[str]:
 
 
 def find_program(name: str) -> str | None:
-    """The full path of the program ``name`` in a folder of :func:`program_path` whose file is closed too (its
-    symbolic links resolved); ``None`` when there is none."""
+    """The real path of the program ``name`` in a folder of :func:`program_path`, when the file and every link on the
+    way to it pass :func:`resolved`; ``None`` when there is none. The real path is what runs (review F1), so a link
+    is not resolved again when the program starts."""
     for folder in program_path():
         found = shutil.which(name, path=folder)
-        if found is not None and _closed(Path(found)):
-            return found
+        if found is not None and (real := resolved(Path(found))) is not None:
+            return str(real)
     return None
 
 

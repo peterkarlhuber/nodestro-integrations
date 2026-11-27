@@ -442,7 +442,8 @@ def test_the_programs_get_no_secrets(programs: Programs, monkeypatch: pytest.Mon
         env = call["env"]
         assert isinstance(env, dict)
         assert "secret-value" not in env.values()
-        assert env["PATH"] == os.environ["PATH"] and env["TESSDATA_PREFIX"] == "/opt/tessdata"
+        assert env["PATH"] == os.environ["PATH"]
+        assert "TESSDATA_PREFIX" not in env  # review F2: the language data folder is never taken from the caller
         assert env["LC_ALL"] == "C.UTF-8" and env["OMP_THREAD_LIMIT"] == "1"
     monkeypatch.setenv("OMP_THREAD_LIMIT", "4")
     assert ocr.program_environment()["OMP_THREAD_LIMIT"] == "4"
@@ -484,7 +485,7 @@ def test_programs_come_only_from_closed_path_folders(
         path = os.pathsep.join(["", ".", "planted", str(planted), str(programs.folder)])
         monkeypatch.setenv("PATH", path)
         assert ocr.program_path() == [str(programs.folder)]
-        assert ocr.find_program("tesseract") == str(programs.folder / "tesseract")
+        assert ocr.find_program("tesseract") == os.path.realpath(programs.folder / "tesseract")
         assert ocr.run_ocr(b"%PDF-1.4", "scan.pdf").pages == 2
         assert not marker.exists()
         assert {call["env"]["PATH"] for call in programs.calls()} == {str(programs.folder)}  # type: ignore[index]
@@ -523,7 +524,7 @@ def test_programs_come_only_from_folders_root_owns(tmp_path: Path, monkeypatch: 
     system = os.path.dirname(os.path.realpath(shutil.which("sh") or "/bin/sh"))
     monkeypatch.setenv("PATH", os.pathsep.join([str(planted), system]))
     assert ocr.program_path() == [system]
-    assert ocr.find_program("tesseract") in (None, os.path.join(system, "tesseract"))
+    assert ocr.find_program("tesseract") in (None, os.path.realpath(os.path.join(system, "tesseract")))
     monkeypatch.setenv("PATH", str(planted))
     assert ocr.program_path() == [] and ocr.find_program("tesseract") is None
     assert not ocr.ocr_available() and not marker.exists()
@@ -556,6 +557,47 @@ def test_every_folder_of_the_chain_must_be_roots_alone(
     monkeypatch.setattr(ocr, "_status", status)
     monkeypatch.setattr(ocr.os.path, "realpath", lambda path: str(path))
     assert ocr._closed(Path("/opt/tools/bin")) is accepted
+
+
+@posix_only
+def test_a_link_through_a_folder_others_control_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Review F1: a program folder links through another folder to the real program. Whoever owns or can write the
+    folder holding a link can repoint it between the check and the start, so every hop is checked, and the real path
+    is what runs. ``rootbin`` and ``real`` stand for root's folders (the test user counts as root here, the rule
+    applies within ``tmp_path``); ``hop`` is varied."""
+    monkeypatch.setattr(ocr, "_chain", lambda real: [real, *(up for up in real.parents if up.is_relative_to(tmp_path))])
+    monkeypatch.setattr(ocr, "program_owners", lambda: frozenset({0, os.geteuid()}))
+    rootbin, hop, real = tmp_path / "rootbin", tmp_path / "hop", tmp_path / "real"
+    for folder in (rootbin, hop, real):
+        folder.mkdir()
+    program = real / "tesseract"
+    program.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    program.chmod(0o755)
+    (hop / "tesseract").symlink_to(program)
+    (rootbin / "tesseract").symlink_to(Path("..") / "hop" / "tesseract")
+    monkeypatch.setenv("PATH", str(rootbin))
+    assert ocr.find_program("tesseract") == os.path.realpath(program)  # the real path, not rootbin/tesseract
+    # The folder holding the second link belongs to another user: refused.
+    hop_real = Path(os.path.realpath(hop))
+    actual = ocr._status
+    monkeypatch.setattr(
+        ocr,
+        "_status",
+        lambda path: (
+            os.stat_result((stat.S_IFDIR | 0o755, 0, 0, 0, 4242, 0, 0, 0, 0, 0))
+            if Path(path) == hop_real
+            else actual(path)
+        ),
+    )
+    assert ocr.find_program("tesseract") is None and not ocr.ocr_available()
+    monkeypatch.setattr(ocr, "_status", actual)
+    # The folder holding the link can be written by every user: refused.
+    hop.chmod(0o777)
+    try:
+        assert ocr.find_program("tesseract") is None
+    finally:
+        hop.chmod(0o755)
+    assert ocr.find_program("tesseract") == os.path.realpath(program)
 
 
 def _planted_wheel(folder: Path, marker: Path) -> Path:
@@ -604,7 +646,7 @@ def test_a_program_a_wheel_installed_is_not_used(
     planted = str(prefix / "bin")
     monkeypatch.setenv("PATH", os.pathsep.join([planted, str(programs.folder)]))
     assert ocr.program_path() == [str(programs.folder)]
-    assert ocr.find_program("tesseract") == str(programs.folder / "tesseract")
+    assert ocr.find_program("tesseract") == os.path.realpath(programs.folder / "tesseract")
     assert ocr.run_ocr(b"%PDF-1.4", "scan.pdf").pages == 2 and not marker.exists()
     monkeypatch.setenv("PATH", planted)
     assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
@@ -622,7 +664,7 @@ def test_a_program_in_the_interpreters_own_folder_is_not_used(
     planted = str(prefix / "bin")
     monkeypatch.setenv("PATH", os.pathsep.join([planted, str(programs.folder)]))
     assert ocr.program_path() == [str(programs.folder)]
-    assert ocr.find_program("tesseract") == str(programs.folder / "tesseract")
+    assert ocr.find_program("tesseract") == os.path.realpath(programs.folder / "tesseract")
     monkeypatch.setenv("PATH", planted)
     assert ocr.find_program("tesseract") is None and not ocr.ocr_available() and not marker.exists()
 
